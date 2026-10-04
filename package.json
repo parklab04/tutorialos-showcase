@@ -1,0 +1,94 @@
+{
+  "name": "helpos-desktop",
+  "version": "0.1.25",
+  "private": true,
+  "description": "A Mac learning companion that shows where to click, one step at a time.",
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build:web": "vite build",
+    "build:electron": "node scripts/build-electron.mjs",
+    "build:native": "node scripts/build-native.mjs",
+    "build": "npm run typecheck && npm run build:web && npm run build:electron && npm run build:native",
+    "typecheck": "tsc --noEmit",
+    "start": "electron .",
+    "test": "node --import tsx --test tests/unit/*.test.ts tests/native/*.test.ts",
+    "package:mac": "npm run build && electron-builder --mac dir --arm64 --publish never",
+    "test:unit": "node --import tsx --test tests/unit/*.test.ts",
+    "test:native": "node --import tsx --test tests/native/*.test.ts",
+    "test:e2e:browser": "node scripts/run-browser-tests.mjs",
+    "test:e2e:desktop": "npm run build && node tests/e2e/desktop/app-help.mjs && node tests/e2e/desktop/call-help.mjs && node tests/e2e/desktop/permissions.mjs && node tests/e2e/desktop/voice-guide.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check": "npm run check:boundaries && npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "koffi": "3.2.1",
+    "lucide-react": "^0.468.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "electron": "44.2.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "^0.28.2",
+    "playwright": "^1.63.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vite": "8.2.2"
+  },
+  "build": {
+    "appId": "app.helpos.desktop",
+    "productName": "HelpOS",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json",
+      "third_party/clicky/**"
+    ],
+    "extraResources": [
+      {
+        "from": "native/libhelpos-observer.dylib",
+        "to": "libhelpos-observer.dylib"
+      }
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "target": [
+        "dir"
+      ],
+      "category": "public.app-category.education",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSHumanReadableCopyright": "HelpOS demo",
+        "NSMicrophoneUsageDescription": "HelpOS listens only when you start voice input to find the guide you request.",
+        "NSSpeechRecognitionUsageDescription": "HelpOS turns your spoken request into text on this Mac so it can show you where to click."
+      },
+      "signIgnore": [
+        "/Contents/MacOS/helpos-app-watcher$"
+      ]
+    },
+    "asarUnpack": [
+      "node_modules/koffi/**",
+      "node_modules/@koromix/**"
+    ],
+    "extraFiles": [
+      {
+        "from": "native/helpos-app-watcher",
+        "to": "MacOS/helpos-app-watcher"
+      },
+      {
+        "from": "native/app.helpos.app-watcher.plist",
+        "to": "Library/LaunchAgents/app.helpos.app-watcher.plist"
+      }
+    ]
+  }
+}

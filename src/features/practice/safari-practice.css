@@ -1,0 +1,60 @@
+.safari-practice { position: relative; min-width: 0; }
+.safari-practice .safari-menubar { height: auto; min-height: 48px; gap: 2px; padding: 0 10px; flex-wrap: wrap; }
+.safari-practice .safari-menubar > strong { padding: 0 7px; }
+.safari-practice-menu-wrap { display: flex; }
+.safari-practice .menu-trigger { gap: 5px; padding: 0 10px; }
+.safari-practice .safari-menu { left: 12px; width: max-content; min-width: min(240px, calc(100% - 24px)); max-width: calc(100% - 24px); }
+.safari-practice .safari-menu button { gap: 18px; background: transparent; overflow-wrap: anywhere; }
+.safari-practice .safari-menu button:hover:not(:disabled) { background: #e4eee2; }
+.safari-practice .safari-menu button > span:first-child { color: var(--ink); }
+.safari-practice .safari-address > div { min-width: 0; overflow-wrap: anywhere; text-align: center; }
+.safari-practice-tabs { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 8px 16px; background: #ecefe8; border-bottom: 1px solid #d8e1d5; font-size: .85rem; }
+.safari-practice-tabs > span { display: inline-flex; align-items: center; gap: 7px; min-width: 0; overflow-wrap: anywhere; }
+.safari-practice-tabs .active { background: white; border-radius: 7px; padding: 5px 10px; }
+.safari-saved-badge { color: #24685d; font-weight: 620; }
+.safari-site-nav { display: flex; flex-wrap: wrap; gap: 12px 22px; padding: 13px 22px; font-size: .8rem; background: #e7eee1; color: #576e54; }
+.safari-site-nav span:first-child { font-weight: 700; color: #31533b; margin-right: auto; }
+.safari-article-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, .48fr); align-items: start; }
+.safari-practice .sample-webpage { min-height: 260px; padding: 25px 22px 30px; }
+.safari-practice .sample-overline { display: flex; align-items: center; gap: 7px; }
+.safari-practice .sample-webpage h2 { font-size: 1.45em; }
+.safari-practice .sample-webpage p { line-height: 1.65; margin-top: 16px; }
+.safari-practice .sample-note { margin-top: 18px; padding-top: 15px; font-size: .85em; }
+.safari-article-extra { margin: 24px 18px 0 0; padding: 12px; border: 1px solid #e0dcc9; border-radius: 10px; background: #f8f3e3; display: flex; flex-direction: column; gap: 9px; font-size: .75rem; }
+.safari-article-extra > strong { font-size: .9rem; }
+.safari-article-extra > span { display: flex; gap: 6px; align-items: flex-start; }
+.safari-community-art { height: 75px; background: #e1e9ce; border-radius: 7px; position: relative; overflow: hidden; }
+.safari-community-art > svg { position: absolute; top: 8px; right: 10px; color: #ba923e; }
+.safari-community-art > span, .safari-community-art > i { position: absolute; bottom: -35px; left: -20px; height: 80px; width: 120px; border-radius: 50%; background: #9eb494; transform: rotate(-20deg); }
+.safari-community-art > i { left: 50px; bottom: -45px; background: #668a70; }
+.safari-practice-article.reader-on { background: #fcf9ef; }
+.reader-on .safari-article-layout { display: block; }
+.safari-practice .reader-on .sample-webpage { max-width: 650px; margin: 0 auto; padding: 28px 35px; }
+.reader-on .sample-webpage h2 { font-family: Georgia, serif; font-size: 1.6em; }
+.reader-on .sample-webpage p { color: #374538; }
+.safari-closed-tab { min-height: 300px; padding: 35px 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; background: #f8faf5; }
+.safari-closed-tab > span { display: grid; place-items: center; width: 66px; height: 66px; border-radius: 18px; background: #e5ede2; color: #587760; }
+.safari-closed-tab > p { color: var(--muted); font-size: 1rem; }
+.safari-bookmark-dialog { position: absolute; top: 130px; left: 16px; right: 16px; z-index: 5; padding: 22px; border: 1px solid #abbeb0; border-radius: 15px; background: #fafbf7; box-shadow: 0 18px 55px #20383340; }
+.safari-bookmark-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.safari-bookmark-heading > span { margin-left: auto; font-size: .8rem; color: var(--muted); }
+.safari-bookmark-dialog dl { display: grid; gap: 14px; margin: 20px 0; font-size: 1rem; }
+.safari-bookmark-dialog dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; align-items: start; }
+.safari-bookmark-dialog dt { color: var(--muted); }
+.safari-bookmark-dialog dd { margin: 0; padding: 7px 11px; background: white; border: 1px solid #ccd8c9; border-radius: 7px; overflow-wrap: anywhere; }
+.safari-bookmark-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.safari-practice .scene-statusbar { flex-wrap: wrap; gap: 8px; font-size: .85rem; }
+@media (max-width: 600px) {
+  .safari-article-layout { grid-template-columns: minmax(0, 1fr); }
+  .safari-article-extra { display: none; }
+  .safari-bookmark-dialog { padding: 16px; }
+  .safari-bookmark-dialog dl > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+.enlarged-text .safari-article-layout { grid-template-columns: minmax(0, 1fr); }
+.enlarged-text .safari-article-extra { display: none; }
+.enlarged-text .safari-bookmark-dialog dl > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+
+.practice-safari-coach.spotlight-coach .practice-coach-content { padding: 16px 20px; }
+.practice-safari-coach.spotlight-coach .step-meta { font-size: .85rem; }
+.practice-safari-coach.spotlight-coach .step-track { margin: 8px 0 14px; }
+.practice-safari-coach.spotlight-coach .instruction-content h2 { font-size: 1.375rem; line-height: 1.3; }

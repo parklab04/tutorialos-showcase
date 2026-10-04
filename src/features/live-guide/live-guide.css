@@ -1,0 +1,65 @@
+.native-coach.icon-coach { height: auto; min-height: 0; border-radius: 14px; overflow: visible; }
+.live-coach-content { display: block; width: 100%; }
+.icon-coach .native-coach-header { padding: 8px 10px; border-radius: 14px 14px 0 0; }
+.live-control-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.live-control-tab { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 5px; min-height: 44px; padding: 5px 3px; background: transparent; border: 1px solid #b5c7bb; border-radius: 7px; font-size: 1rem; line-height: 1.2; border-color: transparent; }
+.live-control-tab svg { width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
+.live-control-tab span { white-space: nowrap; }
+.live-control-tab[aria-selected="true"] { background: #e7f0e5; border-color: transparent; box-shadow: inset 0 -3px #24685d; }
+.live-control-tab:hover:not(:disabled) { background: #edf5ec; }
+.icon-coach .native-coach-body { flex: none; min-height: 0; overflow: visible; padding: 14px 12px; text-align: center; scrollbar-gutter: auto; }
+.live-action { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.live-action-icon { display: grid; place-items: center; color: #24685d; padding: 7px; }
+.live-action-icon svg { width: 2rem; height: 2rem; stroke-width: 1.8; }
+.native-coach.icon-coach h2 { margin: 0; font-size: 1.5rem; line-height: 1.2; overflow-wrap: normal; word-break: normal; }
+.icon-coach .native-coach-body p { margin: 0; font-size: 1.125rem; line-height: 1.25; overflow-wrap: normal; word-break: normal; }
+.icon-coach .live-recovery-button { margin-top: 9px; padding: 7px 16px; min-height: 44px; font-size: 1.125rem; line-height: 1.25; }
+.icon-coach .native-coach-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 10px; max-height: none; overflow: visible; border-radius: 0 0 14px 14px; }
+.icon-coach .native-coach-footer > .button { padding: 7px 5px; min-height: 44px; font-size: 1.125rem; line-height: 1.25; gap: 5px; }
+.icon-coach .native-coach-footer svg { width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
+.live-guide-label { display: block; color: #426353; font-size: 1rem; line-height: 1.25; padding: 2px 2px 8px; text-align: left; }
+.live-action-icon.is-complete { border-radius: 50%; }
+.icon-coach .live-find-app { display: flex; margin: 4px auto 0; min-height: 44px; padding: 5px 10px; font-size: 1rem; }
+.icon-coach .native-coach-footer > .button:only-child { grid-column: 1 / -1; }
+
+.goal-coach .native-coach-header { padding: 9px 12px; }
+.goal-coach .live-guide-label { padding-bottom: 0; }
+.goal-coach .native-coach-body .goal-completion-note { color: #496255; font-size: 1rem; line-height: 1.3; }
+.goal-coach .native-coach-footer .goal-complete { background: #24685d; color: white; }
+
+.live-shortcut-note { display: grid; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #d6e1d8; color: #496255; font-size: 1rem; line-height: 1.3; }
+.icon-coach .native-coach-body .live-shortcut-note p { font-size: 1rem; line-height: 1.3; }
+.live-shortcut-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 12px; }
+.live-shortcut-keys { display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 5px; }
+.live-shortcut-keys kbd { font: inherit; color: #28483e; background: #f0f4ef; border: 1px solid #c4d2c7; border-radius: 5px; padding: 2px 6px; white-space: nowrap; }
+
+/* The compact coach is the companion's only speech bubble and action surface. */
+.native-coach.companion-coach { border: 2px solid #075fc9; background: white; }
+.companion-coach .native-coach-body { padding: .7rem .75rem; border-radius: 11px 11px 0 0; background: #075fc9; color: white; text-align: left; }
+.companion-coach .live-action { align-items: stretch; gap: .35rem; }
+.native-coach.companion-coach h2 { color: white; font-size: 1.25rem; font-weight: 650; line-height: 1.3; }
+.companion-coach .native-coach-body p { color: white; font-size: 1.125rem; line-height: 1.3; }
+.companion-coach .native-coach-footer { padding: .5rem; gap: .4rem; border: 0; }
+.companion-coach .native-coach-footer > .button { font-size: 1.125rem; padding: .35rem .2rem; gap: .25rem; }
+.companion-coach .native-coach-footer > .goal-complete { grid-column: 1 / -1; background: #075fc9; }
+.native-coach.companion-coach .native-coach-footer:has(> .goal-complete) { grid-template-columns: 1fr 1fr; }
+.companion-coach .goal-result-question { grid-column: 1 / -1; margin: .1rem 0; text-align: center; font-size: 1.25rem; line-height: 1.3; color: #263c4d; }
+.companion-coach .live-shortcut-note { color: white; border-color: rgb(255 255 255 / 35%); margin-top: .5rem; padding-top: .5rem; gap: .3rem; font-size: 1rem; }
+.companion-coach .live-shortcut-row { justify-content: space-between; gap: .25rem .5rem; }
+.companion-coach .live-shortcut-keys { gap: .2rem; }
+.companion-coach .live-shortcut-keys kbd { color: white; border-color: rgb(255 255 255 / 50%); background: rgb(255 255 255 / 12%); padding: .1rem .3rem; }
+.companion-coach .live-recovery-button { background: white; color: #075fc9; border-color: white; }
+.companion-guides { padding: 0 .5rem .4rem; }
+.companion-guides summary { display: flex; align-items: center; justify-content: center; min-height: 44px; cursor: pointer; border-radius: 6px; font-size: 1rem; color: #375570; }
+.companion-guides summary::after { content: '⌄'; margin-left: .4rem; }
+.companion-guides[open] summary::after { content: '⌃'; }
+.companion-guides summary:focus-visible { outline: 3px solid #075fc9; outline-offset: -3px; }
+.companion-guides .live-control-tabs { padding-top: .25rem; }
+
+/* The live overlay has no scrim. Its entire surface remains click-through. */
+.pointer-companion { position: fixed; inset: 0; pointer-events: none; z-index: 52; }
+.companion-pointer { position: absolute; overflow: visible; pointer-events: none; transform-origin: center; filter: drop-shadow(0 2px 3px rgb(9 50 101 / 25%)); }
+.companion-pointer path { fill: #075fc9; stroke: white; stroke-width: 1.5; stroke-linejoin: round; }
+@media (prefers-reduced-motion: reduce) {
+  .pointer-companion, .companion-pointer { animation: none !important; transition: none !important; }
+}

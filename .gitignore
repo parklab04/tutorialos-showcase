@@ -1,0 +1,34 @@
+# Dependencies and generated application builds
+node_modules/
+dist/
+dist-electron/
+release/
+/*.app/
+/HelpOS.app
+/*.zip
+native/helpos-observer
+native/helpos-app-watcher
+native/*.dylib
+build/*.iconset/
+
+# Local test output and caches
+test-results/
+coverage/
+.DS_Store
+*.log
+__pycache__/
+*.py[cod]
+
+# Local credentials and signing material
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.key
+
+# Generated presentation deliveries (sources and reference assets stay in Git)
+presentation/**/.build/
+presentation/**/output/*.pptx
+presentation/**/output/*.mp4
+presentation/week-2/assets/*.mp4
