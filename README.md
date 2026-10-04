@@ -1,6 +1,24 @@
-# TutorialOS (HelpOS) | Sprint 1 build update
+# TutorialOS (HelpOS) | Mac learning companion
 
-**A Mac learning companion that points to the next control while the learner does the task.** This is a public project update, not the source repository or a public app release. The current app bundle is still named HelpOS.app.
+**A Mac learning companion that points to the next control while the learner does the task.** This repository contains a filtered public snapshot of the application source and a Sprint 1 project update, not a public app release. The current app bundle is still named HelpOS.app.
+
+## Source code, license, and updates
+
+The application source is here in `src/`, `electron/`, `native/`, `scripts/`, `tests/`, and `public/`, with the build manifests and icons. The original development repository remains private. Its Git history, internal docs, presentation assets, demo-video project files, and release binaries are **not** mirrored here. This public repository keeps its own clean history and the concept video below.
+
+TutorialOS-owned source is available under the [MIT License](./LICENSE). The pointer presentation adapts ideas from Clicky by Farza, licensed under MIT; see the preserved [Clicky notice](./third_party/clicky/NOTICE.md), [license](./third_party/clicky/LICENSE), and [provenance](./third_party/clicky/provenance.json). Dependencies retain their own licenses.
+
+A guarded workflow in the private repository updates this filtered snapshot when allowlisted source files are committed to its `main` branch. It checks known private-path and credential patterns and pins the reviewed Clicky notices. These checks are not a substitute for reviewing new third-party code, claims, or sensitive content before a private-main push. Public README and video edits are maintained separately.
+
+To build from source on macOS 13+ with Node.js 24+ and Xcode Command Line Tools:
+
+```sh
+npm ci
+npm run build
+npm start
+```
+
+The macOS preview is ad-hoc signed and not a notarized public release. Browser previews do not provide the native microphone and overlay behavior.
 
 ## The problem I'm exploring
 
