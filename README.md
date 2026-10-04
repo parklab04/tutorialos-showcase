@@ -10,7 +10,7 @@ When someone is learning an unfamiliar app, a search result or chatbot answer li
 
 In the private Mac preview (v0.1.25), a learner can ask one of five supported English voice requests: FaceTime microphone/camera on or off, or making a Safari page larger. The app transcribes the request for review, brings the target app forward, and shows a blue guide pointer and small instruction bubble near an observed control. The learner clicks the real control and confirms completion. There is a typed-command fallback. It does **not** click for the user, interpret arbitrary requests with an LLM, or verify that the task succeeded. The current flow uses on-device speech recognition and a bounded local parser.
 
-A separate 40-second concept walkthrough uses **simulated screens**, not a recording of live screen recognition. Automated tests use injected observations; live microphone and FaceTime behavior in the installed build still need validation. The preview is not a notarized public release.
+[Watch the 40-second concept walkthrough](./tutorialos-walkthrough.mp4). It uses **simulated screens**, not a recording of live screen recognition. Automated tests use injected observations; live microphone and FaceTime behavior in the installed build still need validation. The preview is not a notarized public release.
 
 ## What I need to learn next
 
