@@ -16,4 +16,3 @@ In the private Mac preview (v0.1.25), a learner can ask one of five supported En
 
 So far I have discussed the idea with my fellowship pair, Aaron. That is **not** three to five customer interviews. Next I want to speak with learners and people who help them, identify one painful task, test whether the pointer actually reduces confusion, and learn who would pay. Feedback on the best first use case and what should be demonstrated in a real-user test is welcome.
 
-*Built as a prototype with GPT-assisted development. The implementation repository remains private while this public page tracks progress.*
