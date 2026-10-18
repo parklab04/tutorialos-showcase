@@ -63,6 +63,75 @@ test('bookmark progresses menu → Add Bookmark → scoped sheet Add, never savi
   h.engine.confirm(); assert.equal(h.engine.getState().verification, 'self-confirmed');
 });
 
+test('bookmark catches up to a scoped Add sheet when the menu transition falls between observations', async t => {
+  const h = harness('safari-bookmark', observation([anchor('Bookmarks')])); t.after(() => h.engine.stop()); await settle();
+  // A learner can choose Add Bookmark (or Command-D) before the next 500 ms read.
+  await h.tick(observation([anchor('Bookmarks'), save()]));
+  assert.equal(h.engine.getState().stepIndex, 2);
+  assert.equal(h.engine.getState().currentAction, 'save-bookmark');
+  assert.deepEqual(h.engine.getState().target, save().rect);
+  assert.equal(h.engine.getState().verification, null, 'catching up does not infer an earlier click');
+  assert.equal(h.engine.getState().canConfirm, false);
+  h.engine.confirm(); assert.equal(h.engine.getState().status, 'guiding');
+  await h.tick(observation([anchor('Bookmarks'), save()]));
+  assert.equal(h.engine.getState().stepIndex, 2, 'a fresh sheet keeps the guide at the observed step');
+  await h.tick(observation([anchor('Bookmarks')]));
+  assert.equal(h.engine.getState().canConfirm, true);
+  assert.equal(h.engine.getState().verification, null, 'closing the sheet could mean Cancel');
+  h.engine.confirm();
+  assert.equal(h.engine.getState().verification, 'self-confirmed');
+});
+
+test('bookmark can start at an already open scoped sheet without an earlier menu sample', async t => {
+  for (const elements of [[save()], [anchor('Bookmarks'), save()]]) {
+    const h = harness('safari-bookmark', observation(elements)); t.after(() => h.engine.stop()); await settle();
+    assert.equal(h.engine.getState().stepIndex, 2);
+    assert.deepEqual(h.engine.getState().target, save().rect);
+    assert.equal(h.engine.getState().canConfirm, false);
+    h.engine.confirm(); assert.notEqual(h.engine.getState().status, 'complete');
+  }
+});
+
+test('bookmark skipped-state recovery rejects invalid, ambiguous and conflicting sheet controls', async t => {
+  for (const controls of [
+    [save({ scope: undefined })], [save({ scope: 'finder-file-menu' })],
+    [save({ role: 'AXStaticText' })], [save({ role: 'AXMenuItem' })],
+    [save({ enabled: false })], [save({ rect: { x: 1200, y: 290, width: 90, height: 32 } })],
+    [save(), save({ id: 'duplicate' })], [save(), save({ id: 'disabled', enabled: false })],
+    [save(), save({ id: 'elsewhere', rect: { x: 740, y: 290, width: 90, height: 32 } })],
+  ]) {
+    const h = harness('safari-bookmark', observation([anchor('Bookmarks')])); t.after(() => h.engine.stop()); await settle();
+    for (let i = 0; i < 2; i++) {
+      await h.tick(observation([anchor('Bookmarks'), ...controls]));
+      assert.equal(h.engine.getState().stepIndex, 0);
+      assert.equal(h.engine.getState().canConfirm, false);
+    }
+    await h.tick(observation([anchor('Bookmarks')]));
+    assert.equal(h.engine.getState().canConfirm, false, 'rejected sheet cannot seed completion history');
+  }
+});
+
+test('bookmark skipped-state recovery requires current Safari AX and document identity', async t => {
+  for (const context of [
+    { trusted: false }, { source: 'ocr' as const }, { source: 'none' as const },
+    { frontmostBundleId: 'com.apple.finder' }, { observedBundleId: 'com.apple.finder' },
+    { window: null }, { windowId: undefined }, { windowId: '' }, { windowId: ' ' },
+  ]) {
+    const h = harness('safari-bookmark', observation([anchor('Bookmarks')])); t.after(() => h.engine.stop()); await settle();
+    await h.tick(observation([anchor('Bookmarks'), save()], context));
+    assert.equal(h.engine.getState().stepIndex, 0);
+    assert.equal(h.engine.getState().canConfirm, false);
+    await h.tick(observation([anchor('Bookmarks')]));
+    assert.equal(h.engine.getState().canConfirm, false);
+  }
+  // The standard harness makes timestamps fresh; exercise the stale boundary directly.
+  const stale = new LiveEngine(async () => observation([anchor('Bookmarks'), save()], { timestamp: Date.now() - 5000 }), () => {}, 100000);
+  t.after(() => stale.stop()); stale.start('safari-bookmark'); await settle();
+  assert.equal(stale.getState().stepIndex, 0);
+  assert.equal(stale.getState().target, null);
+  assert.equal(stale.getState().canConfirm, false);
+});
+
 test('a closed bookmark menu without its observed sheet cannot claim completion', async t => {
   const h = harness('safari-bookmark', observation([anchor('Bookmarks')])); t.after(() => h.engine.stop()); await settle();
   await h.tick(observation([anchor('Bookmarks'), bookmark()]));

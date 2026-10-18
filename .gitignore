@@ -6,6 +6,7 @@ release/
 /*.app/
 /HelpOS.app
 /*.zip
+/*.mp4
 native/helpos-observer
 native/helpos-app-watcher
 native/*.dylib

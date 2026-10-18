@@ -58,7 +58,7 @@ try {
   await coach.getByRole('heading', { name: 'Click View', exact: true }).waitFor();
   await coach.getByRole('button', { name: 'Pause', exact: true }).waitFor();
   assert.equal(await coach.locator('.native-coach-header, .live-action-icon').count(), 0);
-  assert.equal(await coach.locator('h2').evaluate(el => parseFloat(getComputedStyle(el).fontSize)), 20);
+  assert.equal(await coach.locator('h2').evaluate(el => parseFloat(getComputedStyle(el).fontSize)), 22);
   await page.screenshot({ path: 'test-results/pointer-companion-100.png' });
   await page.evaluate(() => {
     const frame = document.getElementById('coach-fixture'); frame.style.width = '640px'; frame.style.left = '10px'; frame.style.top = '136px';
@@ -66,7 +66,7 @@ try {
   });
   await page.waitForFunction(() => parseFloat(document.querySelector('.companion-pointer')?.style.width) === 64);
   await coach.locator('h2').evaluate(el => new Promise(resolve => {
-    const check = () => parseFloat(getComputedStyle(el).fontSize) === 40 ? resolve() : requestAnimationFrame(check); check();
+    const check = () => parseFloat(getComputedStyle(el).fontSize) === 44 ? resolve() : requestAnimationFrame(check); check();
   }));
   const large = await geometry();
   await page.screenshot({ path: 'test-results/pointer-companion-200.png' });

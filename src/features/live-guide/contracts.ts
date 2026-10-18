@@ -9,6 +9,7 @@ export interface Observation {
   timestamp: number; source: 'accessibility' | 'ocr' | 'none';
   window: Rect | null;
   windowId?: string;
+  finderMenuContext?: 'file' | 'other' | 'closed' | 'unknown';
   observedBundleId?: string;
   occluded?: boolean;
   controlVisibility?: ControlVisibility;
@@ -16,7 +17,7 @@ export interface Observation {
 }
 export interface ObservedElement {
   id: string; role: string; label: string; value?: string; enabled: boolean; rect: Rect;
-  selected?: boolean; scope?: 'bookmark-sheet';
+  selected?: boolean; scope?: 'bookmark-sheet' | 'finder-file-menu';
   nativeIdentifier?: 'toggleVideoButton' | 'toggleMicMenuButton';
   subrole?: 'AXSwitch';
 }
@@ -53,7 +54,7 @@ export function guidePointerMode(state: LiveState | null): 'pointing' | 'followi
   if (!state?.sessionId || state.canConfirm) return null;
   if (state.status === 'guiding' && finiteRect(state.target)) return 'pointing';
   if (state.canComplete && state.message === 'No click needed. Choose Complete.') return null;
-  if (state.message === 'Make room for help.' || ['Zoom In is unavailable', 'Reader is not available here', 'No closed tab to reopen', 'Reader is already on'].includes(state.title)) return null;
+  if (state.message === 'Make room for help.' || ['Zoom In is unavailable', 'Reader is not available here', 'No closed tab to reopen', 'Reader is already on', 'New Folder is unavailable', 'Choose an item to rename', 'Choose an item to preview'].includes(state.title)) return null;
   if (['observing', 'waiting-control'].includes(state.status) && finiteRect(state.contextWindow) &&
       (state.permission.accessibility || state.permission.screenCapture)) return 'following';
   return null;

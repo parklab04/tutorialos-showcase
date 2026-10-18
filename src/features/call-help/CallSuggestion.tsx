@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { BookOpen, Bookmark, Camera, ChevronRight, Compass, FolderOpen, Mic, PhoneOff, RotateCcw, Video, X, ZoomIn } from 'lucide-react';
+import { BookOpen, Bookmark, Camera, ChevronRight, Compass, Eye, FolderOpen, FolderPlus, Mic, PhoneOff, RotateCcw, SquarePen, Video, X, ZoomIn } from 'lucide-react';
 import type { LessonId } from '../lessons/types';
 import type { SupportedApp } from './contracts';
 import { useCallHelpState } from './useCallHelpState';
@@ -17,7 +17,12 @@ const apps: Record<SupportedApp, { name: string; icon: typeof Mic; choices: Arra
     { id: 'safari-bookmark', label: 'Save this page', accessible: 'Save this page', icon: Bookmark },
     { id: 'safari-reopen-tab', label: 'Reopen a tab', accessible: 'Reopen a tab', icon: RotateCcw },
   ] },
-  finder: { name: 'Finder', icon: FolderOpen, choices: [{ id: 'finder-downloads', label: 'Find Downloads', accessible: 'Find Downloads', icon: FolderOpen }] },
+  finder: { name: 'Finder', icon: FolderOpen, choices: [
+    { id: 'finder-downloads', label: 'Find Downloads', accessible: 'Find Downloads', icon: FolderOpen },
+    { id: 'finder-new-folder', label: 'Create a folder', accessible: 'Create a folder', icon: FolderPlus },
+    { id: 'finder-rename', label: 'Rename a file', accessible: 'Rename a file', icon: SquarePen },
+    { id: 'finder-quick-look', label: 'Preview a file (Quick Look)', accessible: 'Preview a file (Quick Look)', icon: Eye },
+  ] },
 };
 
 export function CallSuggestion({ scale }: { scale: number }) {
@@ -80,10 +85,13 @@ export function CallSuggestion({ scale }: { scale: number }) {
   const { name, icon: AppIcon, choices } = apps[app];
   return <section className={`call-help-card${app === 'safari' ? ' call-help-safari' : ''}`} aria-labelledby="call-help-title" aria-busy={pending}>
     <div className="call-help-content" ref={content}>
-      <header className="call-help-header"><h1 id="call-help-title">{name} help</h1><button className="call-help-close" aria-label={`Close ${name} help`} onClick={() => void dismiss()}><X size={22} /></button></header>
+      <header className="call-help-header">
+        <div className="call-help-heading"><span className="call-help-identity">TutorialOS</span><h1 id="call-help-title"><AppIcon aria-hidden="true" />{name} help</h1></div>
+        <button className="call-help-close" aria-label={`Close ${name} help`} onClick={() => void dismiss()}><X size={22} aria-hidden="true" /></button>
+      </header>
       <div className="call-help-body">
-        {!(app === 'safari' && (pending || actionError)) && <span className="call-help-chip"><AppIcon aria-hidden="true" />{suggestion ? preview ? 'Demo preview' : suggestion.source === 'detected' && app === 'facetime' ? 'FaceTime call detected' : 'Choose a guide' : name}</span>}
-        {(!suggestion || preview || app !== 'safari') && <p>{suggestion ? preview ? 'Choose a guide for your open app.' : app === 'facetime' ? 'For FaceTime calls.' : 'Follow along in the app.' : error ? 'Could not load help.' : state ? 'No help right now.' : 'Checking…'}</p>}
+        {!(app !== 'facetime' && (pending || actionError)) && <span className="call-help-chip">{suggestion ? preview ? 'Demo preview' : suggestion.source === 'detected' && app === 'facetime' ? 'FaceTime call detected' : 'Choose a guide' : name}</span>}
+        {(!suggestion || (preview && app !== 'finder') || app === 'facetime') && <p>{suggestion ? preview ? 'Choose a guide for your open app.' : 'For FaceTime calls.' : error ? 'Could not load help.' : state ? 'No help right now.' : 'Checking…'}</p>}
         {suggestion && <div className={`call-help-choices${choices.length === 1 ? ' call-help-single-choice' : ''}`}>{choices.map(({ id, label, accessible, icon: Icon }) => <button key={id} className="call-help-choice" aria-label={accessible} data-call-lesson={id} disabled={pending} onClick={() => void act(() => window.helpOS!.chooseCallHelpLesson(id))}><Icon aria-hidden="true" /><span>{label}</span><ChevronRight className="call-help-chevron" aria-hidden="true" /></button>)}</div>}
         {pending && <p className="call-help-feedback" role="status">Opening…</p>}
         {actionError && <p className="call-help-feedback" role="alert">{actionError}</p>}

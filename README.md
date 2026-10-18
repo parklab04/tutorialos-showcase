@@ -1,36 +1,72 @@
-# TutorialOS (HelpOS) | Mac learning companion
+# TutorialOS
 
-**A Mac learning companion that points to the next control while the learner does the task.** This repository contains a filtered public snapshot of the application source and a Sprint 1 project update, not a public app release. The current app bundle is still named HelpOS.app.
+**An on-screen coach for adults learning to use their Mac.** A separate blue guide pointer shows where to click, with a short English instruction beside it. The learner operates the real app.
 
-## Source code, license, and updates
+This is the **MIT-licensed application source**, including React, Electron, Swift, tests, and build configuration. It is an early prototype with prepared guides for three apps. It does not yet provide universal guidance for arbitrary apps or requests.
 
-The application source is here in `src/`, `electron/`, `native/`, `scripts/`, `tests/`, and `public/`, with the build manifests and icons. The original development repository remains private. Its Git history, internal docs, presentation assets, demo-video project files, and release binaries are **not** mirrored here. This public repository keeps its own clean history and the concept video below.
+## Current scope
 
-TutorialOS-owned source is available under the [MIT License](./LICENSE). The pointer presentation adapts ideas from Clicky by Farza, licensed under MIT; see the preserved [Clicky notice](./third_party/clicky/NOTICE.md), [license](./third_party/clicky/LICENSE), and [provenance](./third_party/clicky/provenance.json). Dependencies retain their own licenses.
+| App | Prepared guides in this source |
+| --- | --- |
+| Safari | Make text larger, use Reader, save a bookmark, reopen a closed tab |
+| FaceTime | Mute/unmute, camera off/on, end an existing call |
+| Finder | Find Downloads, create a folder, rename an item, Quick Look |
 
-A guarded workflow in the private repository updates this filtered snapshot when allowlisted source files are committed to its `main` branch. It checks known private-path and credential patterns and pins the reviewed Clicky notices. These checks are not a substitute for reviewing new third-party code, claims, or sensitive content before a private-main push. Public README and video edits are maintained separately.
+The source includes 11 curated guides. Five English voice goals cover FaceTime microphone/camera on or off and Safari zoom. Voice uses Apple on-device Speech; a typed request is also available. Review the request before choosing **Show me**. Complete on a goal session records the learner's confirmation, not an AI judgment.
 
-To build from source on macOS 13+ with Node.js 24+ and Xcode Command Line Tools:
+The app reads macOS Accessibility information to locate controls. It never moves the user's pointer, clicks, types, or starts calls. Automatic help when supported apps open is optional. A missing or ambiguous control produces recovery guidance rather than a guessed target.
+
+## Prototype status
+
+Latest source: **0.1.29**. This update includes a cleaner guide chooser, three additional Finder guides, and a Safari bookmark fix that recovers when the learner reaches the Add sheet between observations.
+
+The native observer, state engine, browser UI, and Electron integration have automated checks. Many checks use injected observations: they prove behavior under the supplied conditions, not recognition of a real app. **Real Finder recognition and a complete real-app journey on this exact version remain unverified.** FaceTime controls can hide or expose incomplete Accessibility information. The last separately recorded installed preview was 0.1.25.
+
+[The concept walkthrough](./tutorialos-walkthrough.mp4) shows **simulated screens**, not live screen recognition. No notarized public installer is provided.
+
+## Build on a Mac
+
+Requirements: macOS 13+, Node.js 24+, and Xcode Command Line Tools. Packaging targets Apple Silicon.
 
 ```sh
+git clone https://github.com/parklab04/tutorialos-showcase.git
+cd tutorialos-showcase
 npm ci
 npm run build
 npm start
 ```
 
-The macOS preview is ad-hoc signed and not a notarized public release. Browser previews do not provide the native microphone and overlay behavior.
+Grant Accessibility to the app you actually run when you want live guidance. Voice input additionally needs Microphone and Speech Recognition access and available on-device English recognition. Grant permissions yourself through macOS. Rebuilt, ad-hoc-signed copies may need renewed permission. `npm run dev` previews the interface in a browser; native overlays and voice require Electron.
 
-## The problem I'm exploring
+```sh
+npm run check
+npm run test:e2e:browser
+npm run test:e2e:desktop
+node tests/e2e/desktop/safari-guides.mjs
+node tests/e2e/desktop/finder-guides.mjs
+npm run package:mac
+```
 
-When someone is learning an unfamiliar app, a search result or chatbot answer lives away from the screen where the task happens. The learner has to translate instructions back into buttons and menus. I'm starting with adults who want to become more confident using their Mac, including older adults. The specific buyer, urgency, and willingness to pay are **not validated yet**.
+Browser checks currently use Google Chrome installed on the Mac. Desktop checks use isolated profiles and mocked native observations. Packaging produces `release/mac-arm64/HelpOS.app`; it does not install the app or grant access. The bundle retains the name HelpOS for its existing platform identity. Builds are ad-hoc signed, not notarized distribution releases.
 
-## What the preview does today
+## How it works
 
-In the private Mac preview (v0.1.25), a learner can ask one of five supported English voice requests: FaceTime microphone/camera on or off, or making a Safari page larger. The app transcribes the request for review, brings the target app forward, and shows a blue guide pointer and small instruction bubble near an observed control. The learner clicks the real control and confirms completion. There is a typed-command fallback. It does **not** click for the user, interpret arbitrary requests with an LLM, or verify that the task succeeded. The current flow uses on-device speech recognition and a bounded local parser.
+| Layer | Responsibility |
+| --- | --- |
+| React + TypeScript | Requests, guide chooser, accessible instruction bubble |
+| Electron + Node.js | Desktop windows, lifecycle, permissions, native bridge |
+| Swift | Read-only macOS Accessibility, app activation, on-device Speech |
+| IPC + Zod | A narrow, validated boundary between the interface and desktop process |
+| Guide engine | Match prepared steps against fresh observed controls; discard stale targets |
 
-[Watch the 40-second concept walkthrough](./tutorialos-walkthrough.mp4). It uses **simulated screens**, not a recording of live screen recognition. Automated tests use injected observations; live microphone and FaceTime behavior in the installed build still need validation. The preview is not a notarized public release.
+The core flow needs no AI API key. Optional text-only AI recommendations map a typed question to prepared lessons; they do not see the screen or execute actions.
 
-## What I need to learn next
+## Contribute
 
-So far I have discussed the idea with my fellowship pair, Aaron. That is **not** three to five customer interviews. Next I want to speak with learners and people who help them, identify one painful task, test whether the pointer actually reduces confusion, and learn who would pay. Feedback on the best first use case and what should be demonstrated in a real-user test is welcome.
+Issues and pull requests are welcome **in this repository**. See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, boundaries, and a useful bug report. [ROADMAP.md](./ROADMAP.md) separates current scope from the proposed path toward broader guidance.
 
+Development currently happens in a private repository. Reviewed source and these public docs are exported here; private history, customer notes, presentation projects, and generated app binaries are excluded. Maintainers integrate public contributions into the development source before the next export, so the mirror does not overwrite accepted work. This is a temporary workflow, not an automatic bidirectional sync.
+
+## License and attribution
+
+TutorialOS-owned source is [MIT licensed](./LICENSE). The companion pointer adapts MIT-licensed code from [Clicky by Farza](https://github.com/farzaa/clicky); the [notice](./third_party/clicky/NOTICE.md), [license](./third_party/clicky/LICENSE), and pinned [provenance](./third_party/clicky/provenance.json) are included. Clicky's speech, screenshot upload, model service, and analytics are not imported. Dependencies retain their own licenses.

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AppWindow, BookOpen, Bookmark, BookmarkPlus, Camera, CameraOff, Check, Folder, History, LoaderCircle, Mic, MicOff, MousePointer2, Pause, PhoneOff, Play, RotateCcw, ShieldCheck, SquareStack, X, ZoomIn } from 'lucide-react';
+import { AppWindow, BookOpen, Bookmark, BookmarkPlus, Camera, CameraOff, Check, Eye, Folder, FolderPlus, History, LoaderCircle, Mic, MicOff, MousePointer2, Pause, PhoneOff, Play, RotateCcw, ShieldCheck, SquarePen, SquareStack, X, ZoomIn } from 'lucide-react';
 import { lessons } from '../lessons/catalog';
 import { useLiveState } from './useLiveState';
 import { spotlightPadding } from '../../shared/ui/spotlight-layout';
@@ -32,6 +32,10 @@ const actions: Record<string, { title: string; icon: typeof Mic }> = {
   'open-history-menu': { title: 'Click History', icon: History },
   'reopen-closed-tab': { title: 'Reopen the tab', icon: RotateCcw },
   'open-downloads': { title: 'Click Downloads', icon: Folder },
+  'open-file-menu': { title: 'Click File', icon: MousePointer2 },
+  'new-folder': { title: 'Click New Folder', icon: FolderPlus },
+  'rename-item': { title: 'Click Rename', icon: SquarePen },
+  'quick-look': { title: 'Click Quick Look', icon: Eye },
 };
 type PermissionPhase = 'idle' | 'asking' | 'settings' | 'ready' | 'error';
 
@@ -208,7 +212,7 @@ export function LiveWindow({ overlay }: { overlay: boolean }) {
   let Icon = action?.icon ?? LoaderCircle;
   let line = state?.status === 'guiding' ? faceTime ? 'Click the outlined button in FaceTime.' : 'Use the outlined button.' : '';
   const permissionSetup = permissionPhase !== 'idle' || state?.status === 'permission';
-  let button: { label: string; run: () => void; disabled?: boolean } | null = null;
+  let button: { label: string; description?: string; run: () => void; disabled?: boolean } | null = null;
   if (actionError || error || state?.status === 'error') {
     title = 'Try again'; Icon = RotateCcw; line = '';
     button = { label: 'Retry', run: () => invoke(window.helpOS?.retryLive) };
@@ -223,12 +227,15 @@ export function LiveWindow({ overlay }: { overlay: boolean }) {
   } else if (paused) {
     title = 'Paused'; Icon = Pause; line = '';
   } else if (state?.canConfirm) {
-    title = lesson?.confirmation?.title ?? 'Text larger?'; Icon = action?.icon ?? ZoomIn; line = '';
-    button = { label: lesson?.confirmation?.label ?? 'Yes, it is larger', run: () => invoke(window.helpOS?.confirmLive) };
+    title = lesson?.confirmation?.title ?? 'Text larger?'; Icon = action?.icon ?? ZoomIn; line = lesson?.confirmation?.instruction ?? '';
+    button = { label: lesson?.app === 'finder' ? 'Complete' : lesson?.confirmation?.label ?? 'Yes, it is larger', description: lesson?.app === 'finder' ? lesson.confirmation?.label : undefined, run: () => invoke(window.helpOS?.confirmLive) };
   } else if (state?.status === 'waiting-app') {
     title = faceTime ? 'Show your call' : lesson?.app === 'finder' ? 'Open Finder' : 'Open Safari'; Icon = AppWindow;
     line = faceTime ? 'Bring your FaceTime call into view. Checking automatically.' : '';
-    if (lesson?.requiresAccessibility) line = 'Keep Safari in front. Checking automatically.';
+    if (lesson?.requiresAccessibility) {
+      line = `Keep ${lesson.app === 'finder' ? 'Finder' : 'Safari'} in front. Checking automatically.`;
+      if (lesson.app === 'finder' && state.title === 'Open a Finder window') { title = state.title; line = state.message; }
+    }
     else if (!faceTime) button = { label: 'Check again', run: () => invoke(window.helpOS?.retryLive) };
   } else if (state?.status === 'waiting-control') {
     const covered = state.title.toLowerCase().includes('covered');
@@ -245,7 +252,7 @@ export function LiveWindow({ overlay }: { overlay: boolean }) {
     else if (lesson?.requiresAccessibility) {
       if (!needsRoom) {
         title = state.title === 'HelpOS could not find the button on this screen.' ? 'Find the button' : state.title;
-        line = state.message === 'Open the app and the screen you need, then check again.' ? 'Keep Safari in front. Checking automatically.' : state.message;
+        line = state.message === 'Open the app and the screen you need, then check again.' ? `Keep ${lesson.app === 'finder' ? 'Finder' : 'Safari'} in front. Checking automatically.` : state.message;
       }
     } else button = { label: 'Check again', run: () => invoke(window.helpOS?.retryLive) };
   } else if (!state || state.status !== 'guiding' || switching) {
@@ -268,7 +275,7 @@ export function LiveWindow({ overlay }: { overlay: boolean }) {
   const recovery = permissionSetup || actionError || error || state?.status === 'error';
   if (!recovery && state?.status === 'guiding' && state.target && !state.canConfirm && !switching) {
     title = action?.title ?? 'Click the outlined button';
-    line = '';
+    line = lesson?.app === 'finder' && lesson.requiresAccessibility ? lesson.steps.find(step => step.action === state.currentAction)?.why ?? '' : '';
   } else if (!recovery && state?.status === 'guiding' && !state.target && !state.canConfirm) {
     title = 'Finding button'; line = '';
   } else if (!recovery) {
@@ -289,6 +296,7 @@ export function LiveWindow({ overlay }: { overlay: boolean }) {
         <span className="live-guide-label">{faceTime ? 'FaceTime' : lesson?.app === 'safari' ? 'Safari' : lesson?.app === 'finder' ? 'Finder' : 'HelpOS'} · Click guide</span>
       </header>}
       <div className="native-coach-body" id={tabs && !recovery ? 'live-control-panel' : undefined} role={tabs && !recovery ? 'tabpanel' : undefined} aria-labelledby={tabs && !recovery ? `live-tab-${state?.lessonId}` : undefined}>
+        {!recovery && <div className="companion-identity"><MousePointer2 aria-hidden="true" /><span>TutorialOS</span></div>}
         <div className="live-action" aria-live="polite" aria-atomic="true">
           {recovery && <span className="live-action-icon" aria-hidden="true"><Icon /></span>}
           <h2>{title}</h2>
@@ -302,12 +310,14 @@ export function LiveWindow({ overlay }: { overlay: boolean }) {
             </span>
           </div>)}
         </aside> : null}
-        {button && <button className="button primary live-recovery-button" disabled={button.disabled} onClick={button.run}>{button.label}</button>}
+        {button && <button className="button primary live-recovery-button" aria-description={button.description} disabled={button.disabled} onClick={button.run}>{button.label}</button>}
         {permissionPhase === 'settings' && <button className="button quiet live-find-app" onClick={() => invoke(window.helpOS?.showAppInFinder)}>Find HelpOS</button>}
       </div>
       <footer className="native-coach-footer">
-        {canComplete && <p className="goal-result-question" id="goal-result-question">{resultQuestion}</p>}
-        {canComplete && <button className="button primary goal-complete" title="Confirm that you completed this task" aria-describedby="goal-result-question" disabled={completing} onClick={() => void completeGoal()}><Check aria-hidden="true" />{completing ? 'Closing…' : 'Complete'}</button>}
+        {canComplete && <div className="goal-confirmation">
+          <p className="goal-result-question" id="goal-result-question">{resultQuestion}</p>
+          <button className="button primary goal-complete" title="Confirm that you completed this task" aria-describedby="goal-result-question" disabled={completing} onClick={() => void completeGoal()}>{completing ? 'Closing…' : 'Complete'}</button>
+        </div>}
         {!permissionSetup && <button className="button secondary" disabled={!state || complete} onClick={() => { invoke(paused ? window.helpOS?.resumeLive : window.helpOS?.pauseLive); }}>{paused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}{paused ? 'Resume' : 'Pause'}</button>}
         <button className="button quiet" onClick={closeHelp} aria-label="Close help"><X aria-hidden="true" />Close help</button>
       </footer>

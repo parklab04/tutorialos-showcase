@@ -11,6 +11,9 @@ export const normalize = (text: string) => text.toLocaleLowerCase().normalize('N
 const faceTimeControlRoles = ['AXButton', 'AXCheckBox', 'AXToggleButton'];
 const safariMenuActions = ['open-view-menu', 'open-bookmarks-menu', 'open-history-menu'];
 const targetMaxAgeMs = 1500;
+function isFinderFileLesson(lesson: Lesson | null): boolean {
+  return lesson?.app === 'finder' && lesson.steps[0]?.action === 'open-file-menu';
+}
 export function validRect(rect: Rect | null | undefined): rect is Rect {
   return !!rect && Object.values(rect).every(Number.isFinite) && Math.abs(rect.x) < 40000 && Math.abs(rect.y) < 40000 && rect.width >= 3 && rect.height >= 3 && rect.width < 12000 && rect.height < 12000;
 }
@@ -27,7 +30,13 @@ function controlsForStep(observation: Observation, lesson: Lesson, stepIndex: nu
   const action = lesson.steps[stepIndex].action;
   return observation.elements.filter(element => {
     if (lesson.app === 'facetime') return insideWindow(element) && faceTimeControlRoles.includes(element.role);
-    if (lesson.app === 'finder') return insideWindow(element) && element.rect.x < observation.window!.x + Math.min(320, observation.window!.width * 0.4);
+    if (lesson.app === 'finder') {
+      if (!isFinderFileLesson(lesson)) return insideWindow(element) && element.rect.x < observation.window!.x + Math.min(320, observation.window!.width * 0.4);
+      if (!observation.trusted || observation.source !== 'accessibility') return false;
+      // The menu bar and its menu are outside the Finder document bounds.
+      return action === 'open-file-menu' ? element.role === 'AXMenuBarItem' && element.rect.height <= 60 :
+        element.role === 'AXMenuItem' && element.scope === 'finder-file-menu';
+    }
     if (action === 'save-bookmark') return observation.trusted && observation.source === 'accessibility' && insideWindow(element) && element.role === 'AXButton' && element.scope === 'bookmark-sheet';
     const menuAnchor = safariMenuActions.includes(action);
     // OCR text alone cannot tell an enabled command from greyed-out text.
@@ -51,6 +60,11 @@ function unavailableMenuCommand(observation: Observation, lesson: Lesson, stepIn
     element.role === 'AXMenuItem' && validRect(element.rect) && element.rect.width <= 1600 && element.rect.height <= 500 &&
     matches(element, lesson.steps[stepIndex].targetAliases));
   return candidates.length === 1 && !candidates[0].enabled;
+}
+function finderCandidates(observation: Observation, lesson: Lesson, stepIndex: number): ObservedElement[] {
+  // Do not merge equal bounds: conflicting duplicates cannot identify one control.
+  return controlsForStep(observation, lesson, stepIndex).filter(element => validRect(element.rect) &&
+    element.rect.width <= 1600 && element.rect.height <= 500 && matches(element, lesson.steps[stepIndex].targetAliases));
 }
 const faceTimeSwitches = {
   'facetime-mic': { identifier: 'toggleMicMenuButton', label: 'Microphone', name: 'microphone', action: 'mic-toggle' },
@@ -84,12 +98,16 @@ function instruction(lesson: Lesson, stepIndex: number, target: ObservedElement)
   if (action === 'open-view-menu') return `Click ${label('View')} in the top menu bar.`;
   if (action === 'open-bookmarks-menu') return `Click ${label('Bookmarks')} in the top menu bar.`;
   if (action === 'open-history-menu') return `Click ${label('History')} in the top menu bar.`;
+  if (action === 'open-file-menu') return `Click ${label('File')} in the top menu bar.`;
   if (action === 'zoom-in') return `Click ${label('Zoom In')} in the open menu.`;
   if (action === 'show-reader') return `Click ${label('Show Reader')} in the open menu.`;
   if (action === 'add-bookmark') return `Click ${label('Add Bookmark')} in the open menu.`;
   if (action === 'save-bookmark') return `Click ${label('Add')} in the bookmark window.`;
   if (action === 'reopen-closed-tab') return `Click ${label('Reopen Last Closed Tab')} in the open menu.`;
   if (action === 'open-downloads') return `Click ${label('Downloads')} on the left side of Finder.`;
+  if (action === 'new-folder') return `Click ${label('New Folder')} in the open menu.`;
+  if (action === 'rename-item') return `Click ${label('Rename')} in the open menu.`;
+  if (action === 'quick-look') return `Click ${label('Quick Look')} in the open menu.`;
   if (action === 'mic-off' || action === 'mic-on') return 'Click the highlighted microphone button.';
   if (action === 'camera-off' || action === 'camera-on') return 'Click the highlighted camera button.';
   return `Click the highlighted “${target.label}” button.`;
@@ -101,6 +119,7 @@ export function initialLiveState(): LiveState {
 type Observer = (bundleId: string, signal: AbortSignal) => Promise<Observation>;
 type Timer = ReturnType<typeof setTimeout>;
 type SafariConfirmationHistory = { sessionId: string; windowId: string; window: Rect };
+type FinderConfirmationHistory = { sessionId: string; windowId: string; window: Rect };
 export class LiveEngine {
   private state: LiveState = initialLiveState();
   private lesson: Lesson | null = null;
@@ -121,6 +140,7 @@ export class LiveEngine {
   private lastSwitchRect: Rect | undefined;
   private goalTargetSeen = false;
   private safariConfirmationHistory: SafariConfirmationHistory | null = null;
+  private finderConfirmationHistory: FinderConfirmationHistory | null = null;
   constructor(private observe: Observer, private publish: (state: LiveState) => void, private interval = 500) {}
   getState(): LiveState { return structuredClone(this.state); }
   private update(patch: Partial<LiveState>) {
@@ -129,21 +149,23 @@ export class LiveEngine {
       ? this.state.permission.accessibility : this.state.permission.accessibility || this.state.permission.screenCapture;
     this.state.canComplete = !!this.state.goal && this.goalTargetSeen && access && !['idle', 'complete', 'permission', 'paused'].includes(this.state.status);
     clearTimeout(this.targetExpiry); this.targetExpiry = undefined;
-    if (this.state.target && this.state.status === 'guiding') {
+    const finderConfirmation = isFinderFileLesson(this.lesson) && this.state.canConfirm;
+    if ((this.state.target && this.state.status === 'guiding') || finderConfirmation) {
       const token = this.epoch;
       // Native reads can stall. A previously valid rectangle must not remain
       // clickable guidance until the much longer native request timeout.
       const remaining = Math.max(1, targetMaxAgeMs - Math.max(0, Date.now() - this.lastTimestamp));
       this.targetExpiry = setTimeout(() => {
-        if (token !== this.epoch || !this.state.target) return;
+        if (token !== this.epoch || (!this.state.target && !(isFinderFileLesson(this.lesson) && this.state.canConfirm))) return;
         this.armed = false;
+        this.finderConfirmationHistory = null;
         this.update({ status: 'observing', target: null, canConfirm: false,
           title: 'Checking button position', message: copy.guide.checking });
       }, remaining);
     }
     this.publish(this.getState());
   }
-  private cancel() { ++this.epoch; clearTimeout(this.timer); this.timer = undefined; clearTimeout(this.targetExpiry); this.targetExpiry = undefined; this.abort?.abort(); this.abort = undefined; this.safariConfirmationHistory = null; }
+  private cancel() { ++this.epoch; clearTimeout(this.timer); this.timer = undefined; clearTimeout(this.targetExpiry); this.targetExpiry = undefined; this.abort?.abort(); this.abort = undefined; this.safariConfirmationHistory = null; this.finderConfirmationHistory = null; }
   private rememberSafariFinalTarget(observation: Observation, stepIndex: number, target: ObservedElement | null) {
     if (this.state.goal || this.lesson?.app !== 'safari' || !this.lesson.confirmation ||
         stepIndex !== this.lesson.steps.length - 1 || !target || !observation.trusted ||
@@ -159,6 +181,16 @@ export class LiveEngine {
         (observation.observedBundleId !== undefined && observation.observedBundleId !== bundleIds.safari) ||
         observation.windowId !== history.windowId || !validRect(observation.window) || !sameBounds(history.window, observation.window))) {
       this.safariConfirmationHistory = null;
+    }
+  }
+  private validateFinderConfirmationHistory(observation: Observation) {
+    const history = this.finderConfirmationHistory;
+    if (history && (history.sessionId !== this.state.sessionId || !observation.trusted ||
+        observation.source !== 'accessibility' || observation.frontmostBundleId !== bundleIds.finder ||
+        (observation.observedBundleId !== undefined && observation.observedBundleId !== bundleIds.finder) ||
+        observation.windowId !== history.windowId || !validRect(observation.window) || !sameBounds(history.window, observation.window) ||
+        !['file', 'closed'].includes(observation.finderMenuContext ?? 'unknown'))) {
+      this.finderConfirmationHistory = null;
     }
   }
   start(id: LessonId): LiveState {
@@ -206,6 +238,11 @@ export class LiveEngine {
   resume() { if (!this.lesson || this.state.status !== 'paused') return; this.pauseReason = null; this.cancel(); this.armed = false; this.update({ status: 'observing', target: null, canConfirm: false, message: copy.guide.checking }); void this.poll(this.epoch); }
   retry() { if (!this.lesson || this.state.status === 'complete') return; this.pauseReason = null; this.cancel(); this.armed = false; this.update({ status: 'observing', target: null, canConfirm: false, message: copy.guide.checking }); void this.poll(this.epoch); }
   confirm() {
+    if (isFinderFileLesson(this.lesson) && (!this.finderConfirmationHistory || Date.now() - this.lastTimestamp > targetMaxAgeMs)) {
+      this.finderConfirmationHistory = null;
+      if (this.state.canConfirm) this.update({ status: 'observing', target: null, canConfirm: false, title: 'Checking Finder', message: copy.guide.checking });
+      return;
+    }
     if (this.state.canConfirm && this.lesson?.confirmation && this.state.stepIndex === this.lesson.steps.length - 1 && this.state.status === 'waiting-control') this.finish('self-confirmed');
   }
   completeGoal(): void {
@@ -220,11 +257,10 @@ export class LiveEngine {
     const neutral = this.lesson && this.neutralSwitchIdentifier ? faceTimeSwitchFor(this.lesson) : null;
     this.cancel(); this.update({ status: 'complete', target: null, canConfirm: false, verification, title: copy.result.title, message: verification === 'observed' ? copy.result.observed : copy.result.selfConfirmed, why: neutral ? `You practiced using the FaceTime ${neutral.name} switch.` : this.lesson?.outcome ?? '' });
   }
-  private advance(observation: Observation) {
+  private advance(observation: Observation, stepIndex = this.state.stepIndex + 1) {
     if (!this.lesson) return;
-    if (this.state.stepIndex + 1 >= this.lesson.steps.length) { this.finish('observed'); return; }
+    if (stepIndex >= this.lesson.steps.length) { this.finish('observed'); return; }
     this.armed = false;
-    const stepIndex = this.state.stepIndex + 1;
     const step = this.lesson.steps[stepIndex];
     const target = controlForStep(observation, this.lesson, stepIndex);
     this.armed = !!target;
@@ -292,18 +328,68 @@ export class LiveEngine {
     this.update({ status: 'guiding', stepIndex: 0, target: target!.rect, currentAction: lesson.steps[desiredIndex].action,
       title: goal.label, message: instruction(lesson, desiredIndex, target!), why: `Choose Complete when your ${kind} is ${desired}.`, canConfirm: false });
   }
+  private acceptFinderFileMenu(observation: Observation) {
+    const lesson = this.lesson!;
+    const finalIndex = lesson.steps.length - 1;
+    const finalStep = lesson.steps[finalIndex];
+    const firstStep = lesson.steps[0];
+    this.armed = false;
+    if (!observation.windowId?.trim()) {
+      this.finderConfirmationHistory = null;
+      this.update({ status: 'waiting-control', target: null, contextWindow: undefined, canConfirm: false,
+        title: 'Open a Finder window', message: 'Open a folder in Finder.', why: '' });
+      return;
+    }
+    const anchors = finderCandidates(observation, lesson, 0);
+    const anchor = anchors.length === 1 && anchors[0].enabled === true ? anchors[0] : null;
+    const commands = finderCandidates(observation, lesson, finalIndex);
+    if (observation.finderMenuContext === 'file') {
+      const command = commands.length === 1 ? commands[0] : null;
+      if (command?.enabled === true) {
+        this.finderConfirmationHistory = { sessionId: this.state.sessionId, windowId: observation.windowId, window: { ...observation.window! } };
+        this.update({ status: 'guiding', stepIndex: finalIndex, currentAction: finalStep.action, target: command.rect, canConfirm: false,
+          title: finalStep.title, message: instruction(lesson, finalIndex, command), why: finalStep.why });
+        return;
+      }
+      this.finderConfirmationHistory = null;
+      const disabled = command?.enabled === false;
+      const unavailableTitle = lesson.id === 'finder-new-folder' ? 'New Folder is unavailable' :
+        lesson.id === 'finder-rename' ? 'Choose an item to rename' : 'Choose an item to preview';
+      this.update({ status: 'waiting-control', stepIndex: 0, currentAction: firstStep.action, target: null, canConfirm: false,
+        title: disabled ? unavailableTitle : 'Finding menu item',
+        message: disabled ? (lesson.id === 'finder-new-folder' ? 'Open a folder you can change, then open File.' : 'Select a file or folder, then open File.') : 'Keep the File menu open.', why: '' });
+      return;
+    }
+    // Closing File can mean Escape, so it only unlocks a learner question. A
+    // different/unknown menu, another window or stale evidence cannot unlock it.
+    const closed = observation.finderMenuContext === 'closed' && !observation.elements.some(element => element.role === 'AXMenuItem');
+    if (closed && this.finderConfirmationHistory && anchor && this.state.stepIndex === finalIndex && lesson.confirmation) {
+      this.update({ status: 'waiting-control', target: null, canConfirm: true, title: lesson.confirmation.title,
+        message: lesson.confirmation.instruction ?? copy.guide.confirmDescription, why: lesson.confirmation.label });
+      return;
+    }
+    this.finderConfirmationHistory = null;
+    this.update({ status: anchor ? 'guiding' : 'waiting-control', stepIndex: 0, currentAction: firstStep.action,
+      target: anchor?.rect ?? null, canConfirm: false, title: firstStep.title,
+      message: anchor ? instruction(lesson, 0, anchor) : 'Use File in the top menu bar.', why: firstStep.why });
+  }
   private accept(observation: Observation) {
     if (!this.lesson) return;
     // Reject stale samples before they can change permission or app context.
     if (observation.timestamp <= this.lastTimestamp || Date.now() - observation.timestamp > targetMaxAgeMs || observation.timestamp > Date.now() + 2000) {
       this.armed = false;
       this.safariConfirmationHistory = null;
+      this.finderConfirmationHistory = null;
       this.update({ status: 'observing', target: null, contextWindow: undefined, canConfirm: false, message: copy.guide.changedScreen }); return;
     }
+    // A blocked event loop may delay the expiry callback until after this read.
+    // Fresh closed-menu metadata must not revive Finder evidence across a gap.
+    if (observation.timestamp - this.lastTimestamp > targetMaxAgeMs || Date.now() - this.lastTimestamp > targetMaxAgeMs) this.finderConfirmationHistory = null;
     this.lastTimestamp = observation.timestamp;
     // A stale rectangle can expire without erasing a prior final control. Only
     // a fresh same-document/access sample may offer learner confirmation later.
     this.validateSafariConfirmationHistory(observation);
+    this.validateFinderConfirmationHistory(observation);
     // Metadata is included in the next validated state publication, never alongside an old target.
     this.state = { ...this.state, permission: { accessibility: observation.trusted, screenCapture: observation.screenCapture }, observationSource: observation.source };
     // Without access, native cannot identify a background call. Asking the user
@@ -330,7 +416,8 @@ export class LiveEngine {
     }
     if (this.lesson.requiresAccessibility && observation.source !== 'accessibility') {
       this.armed = false;
-      this.update({ status: 'waiting-control', target: null, contextWindow: undefined, canConfirm: false, title: 'Waiting for Safari controls', message: 'Keep Safari in view. Checking automatically.' }); return;
+      const name = appNames[this.lesson.app];
+      this.update({ status: 'waiting-control', target: null, contextWindow: undefined, canConfirm: false, title: `Waiting for ${name} controls`, message: `Keep ${name} in view. Checking automatically.` }); return;
     }
     if (!validRect(observation.window)) {
       this.armed = false; this.lastWindow = null; this.lastWindowId = undefined;
@@ -344,6 +431,7 @@ export class LiveEngine {
     this.lastWindow = observation.window;
     this.lastWindowId = windowId;
     if (this.state.goal) { this.acceptGoal(observation); return; }
+    if (isFinderFileLesson(this.lesson)) { this.acceptFinderFileMenu(observation); return; }
     let step = this.lesson.steps[this.state.stepIndex];
     let target = controlForStep(observation, this.lesson, this.state.stepIndex);
     const visible = (aliases: string[]) => observation.elements.some(element => element.enabled && validRect(element.rect) && matches(element, aliases));
@@ -430,6 +518,13 @@ export class LiveEngine {
       const finalTarget = controlForStep(observation, this.lesson, finalIndex);
       const invalidFinalEvidence = finalControls.some(element => !element.enabled) || (finalControls.length > 0 && !finalTarget);
       if (invalidFinalEvidence) this.safariConfirmationHistory = null;
+      // The menu can open and close between reads, or the learner can use
+      // Command-D. A uniquely observed, scoped bookmark sheet identifies the
+      // current step without claiming that an earlier click or save occurred.
+      if (this.state.stepIndex + 1 < finalIndex && this.lesson.steps[finalIndex].action === 'save-bookmark' &&
+          observation.windowId?.trim() && finalControls.length === 1 && finalTarget && !invalidFinalEvidence) {
+        this.advance(observation, finalIndex); return;
+      }
       // Start Page (or a page at its zoom limit) can expose a disabled Zoom In.
       // An open menu is not a reason to keep highlighting View, nor is an
       // unavailable command evidence that the learner enlarged the page.
@@ -503,6 +598,7 @@ export class LiveEngine {
       if (token !== this.epoch) return;
       this.armed = false;
       this.safariConfirmationHistory = null;
+      this.finderConfirmationHistory = null;
       this.update({ status: 'error', target: null, canConfirm: false, title: copy.error.observationTitle, message: copy.error.observationDescription });
     } finally {
       if (this.inFlightEpoch === token) this.inFlightEpoch = undefined;

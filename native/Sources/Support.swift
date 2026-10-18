@@ -40,6 +40,66 @@ func safariMenuItemLabelMayBeRead(menu: String?, command: String, identifier: St
     return false
 }
 
+// Finder commands stay AX-only: adding these names to allowedLabels would
+// accidentally turn text in screenshots or file listings into command targets.
+func finderFileMenuAnchor(_ value: String) -> String? {
+    ["File", "파일"].contains(value.trimmingCharacters(in: .whitespacesAndNewlines)) ? "File" : nil
+}
+func finderWindowMayBeDocument(role: String, subrole: String?, minimized: Bool) -> Bool {
+    role == "AXWindow" && !minimized && !["AXFloatingWindow", "AXDialog", "AXSystemDialog", "AXSystemFloatingWindow"].contains(subrole ?? "")
+}
+func finderQuickLookShortcut(command: String, virtualKey: Int?, modifiers: Int?) -> Bool {
+    // AX modifier bits: Shift 1, Option 2, Control 4, and NoCommand 8.
+    // Command-Y is the File-menu command; unmodified Space is also exposed by
+    // some menu variants. Unknown or alternate modifiers are not equivalent.
+    (command.lowercased() == "y" && modifiers == 0) ||
+        ((command == " " || virtualKey == 49) && modifiers == 8)
+}
+func finderFileMenuCommand(_ value: String, command: String, virtualKey: Int?, modifiers: Int?) -> String? {
+    let label = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    if ["New Folder", "새로운 폴더", "새 폴더"].contains(label) { return "New Folder" }
+    // Batch Rename opens a different workflow. Do not normalize its ellipsis,
+    // selected-item count or any filename-bearing variation to singular Rename.
+    if ["Rename", "이름 변경"].contains(label) { return "Rename" }
+    guard finderQuickLookShortcut(command: command, virtualKey: virtualKey, modifiers: modifiers) else { return nil }
+    if ["Quick Look", "훑어보기"].contains(label) { return "Quick Look" }
+    // A dynamic command can contain a filename. Retain only its fixed purpose,
+    // never the filename. Bare arbitrary suffixes and multi-item labels fail.
+    for (open, close) in [("“", "”"), ("‘", "’"), ("\"", "\""), ("'", "'")] {
+        if label.hasPrefix("Quick Look \(open)"), label.hasSuffix(close),
+           label.count > "Quick Look \(open)\(close)".count { return "Quick Look" }
+        if label.hasPrefix(open), label.hasSuffix("\(close) 훑어보기"),
+           label.count > "\(open)\(close) 훑어보기".count { return "Quick Look" }
+    }
+    return nil
+}
+func finderFileMenuRecord(id: String, role: String, title: String, menu: String?, visible: Bool, enabled: Bool?,
+                          menuRect: CGRect, rect: CGRect, command: String, virtualKey: Int?, modifiers: Int?) -> [String: Any]? {
+    guard menu == "File", visible, role == "AXMenuItem", let enabled,
+          finiteRect(menuRect), finiteRect(rect), menuRect.insetBy(dx: -2, dy: -2).contains(rect),
+          let label = finderFileMenuCommand(title, command: command, virtualKey: virtualKey, modifiers: modifiers) else { return nil }
+    return ["id": id, "role": role, "label": label, "enabled": enabled, "rect": dict(rect), "scope": "finder-file-menu"]
+}
+
+enum FinderMenuVisibility { case visible, closed, unknown }
+func finderMenuVisibility(hidden: Bool?, explicitVisibility: Bool?, visibleChildCount: Int?, hasMenuWindow: Bool?, validGeometry: Bool) -> FinderMenuVisibility {
+    if hidden == true || explicitVisibility == false {
+        return hasMenuWindow == true ? .unknown : .closed
+    }
+    if explicitVisibility == true || (visibleChildCount ?? 0) > 0 || hasMenuWindow == true {
+        return validGeometry ? .visible : .unknown
+    }
+    if visibleChildCount == 0, hasMenuWindow == false, validGeometry { return .closed }
+    return .unknown
+}
+func finderObservedMenuContext(_ menus: [(file: Bool, visibility: FinderMenuVisibility)], complete: Bool) -> String {
+    let visible = menus.filter { $0.visibility == .visible }
+    if visible.count == 1 { return visible[0].file ? "file" : "other" }
+    guard visible.isEmpty, complete, !menus.isEmpty,
+          !menus.contains(where: { $0.visibility == .unknown }) else { return "unknown" }
+    return "closed"
+}
+
 struct ChromeWindow {
     let id: CGWindowID
     let pid: pid_t
@@ -72,6 +132,11 @@ func stableSafariDocumentID(_ rect: CGRect, pid: pid_t, before: [ChromeWindow], 
     guard let original = uniqueSafariDocumentID(rect, pid: pid, windows: before),
           original == uniqueSafariDocumentID(rect, pid: pid, windows: after) else { return nil }
     return original
+}
+func finderAttachedDocumentIsValid(attached: Bool, role: String, subrole: String?, minimized: Bool,
+                                   rect: CGRect?, pid: pid_t, windows: [ChromeWindow]) -> Bool {
+    guard attached, finderWindowMayBeDocument(role: role, subrole: subrole, minimized: minimized), let rect else { return false }
+    return uniqueSafariDocumentID(rect, pid: pid, windows: windows) != nil
 }
 func safariMenuWindowIsVisible(_ rect: CGRect, document: CGRect, pid: pid_t, windows: [ChromeWindow]) -> Bool {
     guard finiteRect(rect), let documentID = uniqueSafariDocumentID(document, pid: pid, windows: windows) else { return false }

@@ -1,6 +1,7 @@
 {
   "name": "helpos-desktop",
-  "version": "0.1.25",
+  "version": "0.1.29",
+  "license": "MIT",
   "private": true,
   "description": "A Mac learning companion that shows where to click, one step at a time.",
   "type": "module",
@@ -13,10 +14,10 @@
     "build": "npm run typecheck && npm run build:web && npm run build:electron && npm run build:native",
     "typecheck": "tsc --noEmit",
     "start": "electron .",
-    "test": "node --import tsx --test tests/unit/*.test.ts tests/native/*.test.ts",
+    "test": "npm run test:unit && npm run test:native",
     "package:mac": "npm run build && electron-builder --mac dir --arm64 --publish never",
     "test:unit": "node --import tsx --test tests/unit/*.test.ts",
-    "test:native": "node --import tsx --test tests/native/*.test.ts",
+    "test:native": "node --import tsx --test --test-concurrency=1 tests/native/*.test.ts",
     "test:e2e:browser": "node scripts/run-browser-tests.mjs",
     "test:e2e:desktop": "npm run build && node tests/e2e/desktop/app-help.mjs && node tests/e2e/desktop/call-help.mjs && node tests/e2e/desktop/permissions.mjs && node tests/e2e/desktop/voice-guide.mjs",
     "check:boundaries": "node scripts/check-boundaries.mjs",
@@ -51,6 +52,7 @@
       "dist/**",
       "dist-electron/**",
       "package.json",
+      "LICENSE",
       "third_party/clicky/**"
     ],
     "extraResources": [

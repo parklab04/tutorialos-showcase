@@ -187,4 +187,40 @@ export const lessons: Lesson[] = [
       },
     ],
   },
+  {
+    id: 'finder-new-folder', app: 'finder', title: 'Create a folder',
+    description: 'Make a folder to keep your files together.', duration: '2 steps',
+    outcome: 'You confirmed that your new folder is ready.',
+    prerequisite: 'Open the Finder folder where you want the new folder.',
+    requiresAccessibility: true,
+    confirmation: { title: 'Name your folder', label: 'Yes, my folder is ready', instruction: 'Type a name, press Return, then choose Complete.' },
+    steps: [
+      { id: 'open-file-menu', title: 'Open File', instruction: 'Click File.', why: 'This menu has the option to create a folder.', target: 'file-menu', targetAliases: ['File', '파일'], action: 'open-file-menu' },
+      { id: 'new-folder', title: 'Create a folder', instruction: 'Click New Folder.', why: 'Then type a name and press Return.', target: 'new-folder', targetAliases: ['New Folder', '새로운 폴더', '새 폴더'], action: 'new-folder', keyboardShortcuts: [{ label: 'New folder', keys: ['Shift', 'Command', 'N'] }] },
+    ],
+  },
+  {
+    id: 'finder-rename', app: 'finder', title: 'Rename a file',
+    description: 'Give a selected file or folder a clearer name.', duration: '2 steps',
+    outcome: 'You confirmed that the name has changed.',
+    prerequisite: 'Select one file or folder in Finder, then open File.',
+    requiresAccessibility: true,
+    confirmation: { title: 'Rename your file', label: 'Yes, the name changed', instruction: 'Keep the extension. Press Return, then Complete.' },
+    steps: [
+      { id: 'open-file-menu', title: 'Open File', instruction: 'Click File.', why: 'Select one file or folder first.', target: 'file-menu', targetAliases: ['File', '파일'], action: 'open-file-menu' },
+      { id: 'rename-item', title: 'Rename your file', instruction: 'Click Rename.', why: 'Type a new name, keep the file extension, then press Return.', target: 'rename-item', targetAliases: ['Rename', '이름 변경'], action: 'rename-item' },
+    ],
+  },
+  {
+    id: 'finder-quick-look', app: 'finder', title: 'Preview a file',
+    description: 'Take a quick look without opening another app.', duration: '2 steps',
+    outcome: 'You confirmed that the preview opened.',
+    prerequisite: 'Select one file in Finder, then open File.',
+    requiresAccessibility: true,
+    confirmation: { title: 'Preview open?', label: 'Yes, the preview is open', instruction: 'Choose Complete if the preview opened.' },
+    steps: [
+      { id: 'open-file-menu', title: 'Open File', instruction: 'Click File.', why: 'Select a file first.', target: 'file-menu', targetAliases: ['File', '파일'], action: 'open-file-menu' },
+      { id: 'quick-look', title: 'Preview your file', instruction: 'Click Quick Look.', why: 'This opens a preview of your selected file.', target: 'quick-look', targetAliases: ['Quick Look', '훑어보기'], action: 'quick-look', keyboardShortcuts: [{ label: 'Quick Look', keys: ['Command', 'Y'] }] },
+    ],
+  },
 ];

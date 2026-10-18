@@ -33,28 +33,36 @@
 .live-shortcut-keys { display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 5px; }
 .live-shortcut-keys kbd { font: inherit; color: #28483e; background: #f0f4ef; border: 1px solid #c4d2c7; border-radius: 5px; padding: 2px 6px; white-space: nowrap; }
 
-/* The compact coach is the companion's only speech bubble and action surface. */
-.native-coach.companion-coach { border: 2px solid #075fc9; background: white; }
-.companion-coach .native-coach-body { padding: .7rem .75rem; border-radius: 11px 11px 0 0; background: #075fc9; color: white; text-align: left; }
-.companion-coach .live-action { align-items: stretch; gap: .35rem; }
-.native-coach.companion-coach h2 { color: white; font-size: 1.25rem; font-weight: 650; line-height: 1.3; }
-.companion-coach .native-coach-body p { color: white; font-size: 1.125rem; line-height: 1.3; }
-.companion-coach .native-coach-footer { padding: .5rem; gap: .4rem; border: 0; }
-.companion-coach .native-coach-footer > .button { font-size: 1.125rem; padding: .35rem .2rem; gap: .25rem; }
-.companion-coach .native-coach-footer > .goal-complete { grid-column: 1 / -1; background: #075fc9; }
-.native-coach.companion-coach .native-coach-footer:has(> .goal-complete) { grid-template-columns: 1fr 1fr; }
-.companion-coach .goal-result-question { grid-column: 1 / -1; margin: .1rem 0; text-align: center; font-size: 1.25rem; line-height: 1.3; color: #263c4d; }
-.companion-coach .live-shortcut-note { color: white; border-color: rgb(255 255 255 / 35%); margin-top: .5rem; padding-top: .5rem; gap: .3rem; font-size: 1rem; }
+/* One opaque speech-bubble surface. The native blue pointer supplies direction;
+   a fixed CSS tail would point the wrong way when placement changes. */
+.native-coach.companion-coach { margin: 8px; border: 1px solid #d7e0db; border-radius: 22px; background: #fff; color: #20332f; box-shadow: 0 2px 4px rgb(21 52 42 / 16%); }
+.companion-coach .native-coach-body { padding: 1.125rem 1.125rem .375rem; border-radius: 22px 22px 0 0; background: transparent; text-align: left; }
+.companion-identity { display: flex; align-items: center; gap: .375rem; margin-bottom: .5rem; color: #50635e; font-size: .875rem; line-height: 1.3; }
+.companion-identity svg { width: 1rem; height: 1rem; color: #075fc9; stroke-width: 2; }
+.companion-coach .live-action { align-items: stretch; gap: .5rem; }
+.native-coach.companion-coach h2 { color: #20332f; font-size: 1.375rem; font-weight: 570; line-height: 1.3; }
+.companion-coach .native-coach-body p { color: #50635e; font-size: 1.125rem; line-height: 1.35; }
+.companion-coach .native-coach-footer { padding: .375rem 1.125rem .75rem; gap: .375rem; border: 0; background: transparent; border-radius: 0 0 22px 22px; }
+.companion-coach .native-coach-footer > .button { min-height: 44px; font-size: 1.125rem; font-weight: 500; line-height: 1.3; padding: .5rem .25rem; gap: .375rem; border: 0; border-radius: 10px; background: transparent; color: #50635e; }
+.companion-coach .native-coach-footer > .button:hover:not(:disabled) { background: #eef3f0; }
+.companion-coach .goal-confirmation { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .75rem; margin: .375rem 0; }
+.companion-coach .goal-result-question { margin: 0; text-align: left; font-size: 1rem; line-height: 1.35; color: #50635e; }
+.companion-coach .native-coach-footer .goal-complete { min-height: 44px; padding: .5rem .75rem; border: 1px solid #075aad; border-radius: 10px; font-size: 1rem; font-weight: 570; line-height: 1.3; background: #075aad; color: #fff; white-space: nowrap; }
+.companion-coach .native-coach-footer .goal-complete:hover:not(:disabled) { background: #064a8e; border-color: #064a8e; }
+.companion-coach .live-shortcut-note { color: #50635e; border: 0; margin-top: .75rem; padding-top: 0; gap: .375rem; font-size: 1rem; }
 .companion-coach .live-shortcut-row { justify-content: space-between; gap: .25rem .5rem; }
-.companion-coach .live-shortcut-keys { gap: .2rem; }
-.companion-coach .live-shortcut-keys kbd { color: white; border-color: rgb(255 255 255 / 50%); background: rgb(255 255 255 / 12%); padding: .1rem .3rem; }
-.companion-coach .live-recovery-button { background: white; color: #075fc9; border-color: white; }
-.companion-guides { padding: 0 .5rem .4rem; }
-.companion-guides summary { display: flex; align-items: center; justify-content: center; min-height: 44px; cursor: pointer; border-radius: 6px; font-size: 1rem; color: #375570; }
+.companion-coach .live-shortcut-keys { gap: .25rem; }
+.companion-coach .live-shortcut-keys kbd { color: #38524a; border: 0; border-radius: 4px; background: #f1f5f2; padding: .125rem .25rem; }
+.companion-coach .live-recovery-button { background: #075aad; color: white; border-color: #075aad; }
+.companion-coach .live-recovery-button:hover:not(:disabled) { background: #064a8e; border-color: #064a8e; }
+.companion-coach button:focus-visible, .companion-guides summary:focus-visible { outline: 3px solid #075fc9; outline-offset: 2px; }
+.companion-guides { padding: 0 1.125rem .5rem; }
+.companion-guides summary { display: flex; align-items: center; justify-content: center; min-height: 44px; cursor: pointer; border-radius: 10px; font-size: 1rem; color: #50635e; }
+.companion-guides summary:hover { background: #eef3f0; }
 .companion-guides summary::after { content: '⌄'; margin-left: .4rem; }
 .companion-guides[open] summary::after { content: '⌃'; }
-.companion-guides summary:focus-visible { outline: 3px solid #075fc9; outline-offset: -3px; }
 .companion-guides .live-control-tabs { padding-top: .25rem; }
+.companion-guides .live-control-tab { flex-direction: column; gap: .125rem; padding: .375rem .125rem; }
 
 /* The live overlay has no scrim. Its entire surface remains click-through. */
 .pointer-companion { position: fixed; inset: 0; pointer-events: none; z-index: 52; }

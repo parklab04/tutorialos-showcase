@@ -12,6 +12,18 @@ const base = { sessionId: 'initial', lessonId: 'facetime-mic', status: 'guiding'
 const zoom = { lessonId: 'safari-zoom', currentAction: 'zoom-in', stepIndex: 1, title: 'Click Zoom In', message: 'Click “Zoom In” in the open menu.', why: '' };
 const manualZoom = { ...zoom, completionMode: 'manual', goal: { id: 'zoom-in', label: 'Make text larger', app: 'safari' }, canComplete: true, why: 'Choose Complete when the text is large enough.' };
 const zoomShortcuts = ['Zoom in: Command and Plus', 'Zoom out: Command and Minus'];
+const finderGuides = [
+  { lessonId: 'finder-new-folder', action: 'new-folder', title: 'Click New Folder', prerequisite: 'This menu has the option to create a folder.', explanation: 'Then type a name and press Return.', shortcut: ['New folder: Shift and Command and N'], confirmation: 'Name your folder', instruction: 'Type a name, press Return, then choose Complete.', description: 'Yes, my folder is ready' },
+  { lessonId: 'finder-rename', action: 'rename-item', title: 'Click Rename', prerequisite: 'Select one file or folder first.', explanation: 'Type a new name, keep the file extension, then press Return.', shortcut: [], confirmation: 'Rename your file', instruction: 'Keep the extension. Press Return, then Complete.', description: 'Yes, the name changed' },
+  { lessonId: 'finder-quick-look', action: 'quick-look', title: 'Click Quick Look', prerequisite: 'Select a file first.', explanation: 'This opens a preview of your selected file.', shortcut: ['Quick Look: Command and Y'], confirmation: 'Preview open?', instruction: 'Choose Complete if the preview opened.', description: 'Yes, the preview is open' },
+];
+const finderRecovery = [
+  { lessonId: 'finder-new-folder', title: 'New Folder is unavailable', message: 'Open a folder you can change, then open File.' },
+  { lessonId: 'finder-rename', title: 'Choose an item to rename', message: 'Select a file or folder, then open File.' },
+  { lessonId: 'finder-quick-look', title: 'Choose an item to preview', message: 'Select a file or folder, then open File.' },
+  { lessonId: 'finder-rename', title: 'Finding menu item', message: 'Keep the File menu open.' },
+  { lessonId: 'finder-new-folder', title: 'Open a Finder window', message: 'Open a folder in Finder.' },
+];
 await page.addInitScript(initial => {
   window.calls = []; window.testState = { ...initial, coachLayoutId: 'fixture-initial' }; window.layoutSequence = 0;
   window.permissionResult = { granted: false, settingsOpened: true };
@@ -85,7 +97,7 @@ const fit = async (maximumHeight = 740) => {
       width: innerWidth, height: innerHeight,
       documentFits: document.documentElement.scrollWidth <= innerWidth + 1 && document.documentElement.scrollHeight <= innerHeight + 1,
       containers: [...selectors.map(selector => document.querySelector(selector)), ...document.querySelectorAll('.live-shortcut-note, .live-shortcut-row, .live-shortcut-keys')].map(el => ({ selector: el.className, scrollHeight: el.scrollHeight, height: el.clientHeight, scrollWidth: el.scrollWidth, width: el.clientWidth, overflowY: getComputedStyle(el).overflowY })),
-      targets: [...document.querySelectorAll('.native-coach h2, .native-coach p, .native-coach button, .live-action-icon, .live-control-tab svg, .live-control-tab span, .live-shortcut-row, .live-shortcut-keys kbd')].filter(el => el.getClientRects().length && !el.closest('details:not([open])')).map(el => { const r = el.getBoundingClientRect(); return { label: el.textContent || 'icon', x: r.x, y: r.y, width: r.width, height: r.height }; }),
+      targets: [...document.querySelectorAll('.native-coach h2, .native-coach p, .native-coach button, .companion-identity, .companion-guides summary, .live-action-icon, .live-control-tab svg, .live-control-tab span, .live-shortcut-row, .live-shortcut-keys kbd')].filter(el => el.getClientRects().length && (el.tagName === 'SUMMARY' || !el.closest('details:not([open])'))).map(el => { const r = el.getBoundingClientRect(); return { label: el.textContent || 'icon', interactive: el.matches('button, summary'), x: r.x, y: r.y, width: r.width, height: r.height }; }),
     };
   });
   assert.ok(boxes.documentFits, 'Document must not scroll');
@@ -93,7 +105,10 @@ const fit = async (maximumHeight = 740) => {
     assert.ok(box.scrollHeight <= box.height + 1 && box.scrollWidth <= box.width + 1, `${box.selector} has clipped or scrolling content`);
     assert.equal(['auto', 'scroll'].includes(box.overflowY), false, `${box.selector} must not scroll`);
   }
-  for (const box of boxes.targets) assert.ok(box.x >= -1 && box.y >= -1 && box.x + box.width <= boxes.width + 1 && box.y + box.height <= boxes.height + 1, `${box.label} must fit without scrolling`);
+  for (const box of boxes.targets) {
+    assert.ok(box.x >= -1 && box.y >= -1 && box.x + box.width <= boxes.width + 1 && box.y + box.height <= boxes.height + 1, `${box.label} must fit without scrolling`);
+    if (box.interactive) assert.ok(box.width >= 44 && box.height >= 44, `${box.label} needs a 44px click target`);
+  }
   const tabFits = await page.locator('.live-control-tab:visible').evaluateAll(elements => elements.every(el => [...el.children].every(child => { const inner = child.getBoundingClientRect(); const outer = el.getBoundingClientRect(); return inner.x >= outer.x - 1 && inner.right <= outer.right + 1; })));
   assert.ok(tabFits, 'Every tab icon and word must stay inside its own button');
   // Let the compositor finish the resized native-window fixture before capture.
@@ -112,6 +127,7 @@ try {
   await check('One compact instruction bubble with reachable controls and optional Guides', async () => {
     assert.equal(await page.locator('[data-presentation="companion"]').count(), 1);
     assert.equal(await page.locator('.native-coach-header, .live-action-icon').count(), 0);
+    assert.equal(await page.getByText('TutorialOS', { exact: true }).isVisible(), true);
     assert.equal(await page.getByText('Click the outlined button in FaceTime.', { exact: true }).count(), 0);
     assert.equal(await page.getByText(base.why, { exact: true }).count(), 0);
     assert.equal(await page.getByRole('tab').count(), 0);
@@ -122,7 +138,20 @@ try {
     await page.getByText('Guides', { exact: true }).click();
     await shortcuts();
     assert.deepEqual(await meaningful(), []); await fit();
+    await page.mouse.move(0, 0);
     await page.screenshot({ path: 'test-results/coach-no-scroll-default.png' });
+  });
+  await check('Quiet controls stay visible and show keyboard focus without hovering', async () => {
+    for (const name of ['Pause', 'Close help']) {
+      const control = page.getByRole('button', { name, exact: true });
+      assert.equal(await control.isVisible(), true);
+      await page.keyboard.press('Tab');
+      await control.focus();
+      const focus = await control.evaluate(el => ({ visible: el.matches(':focus-visible'), style: getComputedStyle(el).outlineStyle, width: parseFloat(getComputedStyle(el).outlineWidth) }));
+      assert.ok(focus.visible && focus.style !== 'none' && focus.width >= 2, `${name} needs visible keyboard focus`);
+    }
+    await page.getByRole('button', { name: 'Close help', exact: true }).evaluate(el => el.blur());
+    assert.deepEqual(await meaningful(), [], 'Checking focus does not act on the target or complete a guide');
   });
   await check('Height reports require a layout ID, remeasure equal-size layouts, and ignore superseded failures', async () => {
     const heightCalls = () => page.evaluate(() => window.calls.filter(([type]) => type === 'height'));
@@ -160,13 +189,21 @@ try {
     [{ lessonId: 'safari-zoom', status: 'waiting-control', canConfirm: true }, 'Text larger?'],
     [zoom, 'Click Zoom In', zoomShortcuts],
     [manualZoom, 'Click Zoom In', zoomShortcuts],
+    [{ completionMode: 'manual', goal: { id: 'mute', label: 'Mute my microphone', app: 'facetime' }, currentAction: 'mic-toggle', canComplete: true }, 'Click microphone'],
     [{ lessonId: 'safari-reader', currentAction: 'show-reader', stepIndex: 1 }, 'Click Show Reader', ['Show Reader: Shift and Command and R']],
     [{ lessonId: 'safari-bookmark', currentAction: 'add-bookmark', stepIndex: 1 }, 'Click Add Bookmark', ['Add a bookmark: Command and D']],
     [{ lessonId: 'safari-reopen-tab', currentAction: 'reopen-closed-tab', stepIndex: 1 }, 'Reopen the tab', ['Reopen the tab: Shift and Command and T']],
     [{ lessonId: 'safari-zoom', status: 'waiting-control', currentAction: 'open-view-menu', stepIndex: 0, title: 'Zoom In is unavailable', message: 'Try another webpage, then open View.', why: '', target: null, canConfirm: false }, 'Zoom In is unavailable'],
     [{ lessonId: 'finder-downloads', currentAction: 'open-downloads' }, 'Click Downloads', ['Open Downloads: Option and Command and L']],
+    ...finderGuides.flatMap(guide => [
+      [{ lessonId: guide.lessonId, currentAction: 'open-file-menu', stepIndex: 0 }, 'Click File'],
+      [{ lessonId: guide.lessonId, currentAction: guide.action, stepIndex: 1 }, guide.title, guide.shortcut],
+      [{ lessonId: guide.lessonId, currentAction: guide.action, stepIndex: 1, status: 'waiting-control', target: null, canConfirm: true }, guide.confirmation],
+    ]),
+    ...finderRecovery.map(value => [{ ...value, currentAction: 'open-file-menu', status: 'waiting-control', target: null, canConfirm: false }, value.title]),
   ];
-  for (const [scale, width, maxHeight] of [[1, 320, 600], [2, 640, 740], [2, 540, 600]]) {
+  const layouts = [[1, 300, 600], [1, 320, 600], [1.25, 400, 650], [1.5, 480, 700], [2, 640, 740], [2, 540, 600]];
+  for (const [scale, width, maxHeight] of layouts) {
     await check(`${cases.length} states without scroll at ${scale * 100}% and ${width}px`, async () => {
       await page.setViewportSize({ width, height: maxHeight });
       await page.evaluate(value => { localStorage.setItem('helpos:text-scale', String(value)); window.dispatchEvent(new StorageEvent('storage', { key: 'helpos:text-scale', newValue: String(value) })); }, scale);
@@ -186,12 +223,23 @@ try {
           assert.equal(await page.getByRole('button', { name: 'Pause', exact: true }).isVisible(), true);
           assert.equal(await page.getByRole('button', { name: 'Close help', exact: true }).isVisible(), true);
         }
+        if (value.lessonId?.startsWith('finder-') && value.lessonId !== 'finder-downloads') {
+          const guide = finderGuides.find(item => item.lessonId === value.lessonId);
+          const expectedLine = value.canConfirm ? guide.instruction : value.message ?? (value.currentAction === 'open-file-menu' ? guide.prerequisite : guide.explanation);
+          assert.equal(await page.getByText(expectedLine, { exact: true }).isVisible(), true);
+          assert.equal(await page.getByRole('button', { name: 'Check again', exact: true }).count(), 0);
+          assert.equal(await page.getByRole('button', { name: 'Complete', exact: true }).count(), value.canConfirm ? 1 : 0);
+        }
         await fit(maxHeight);
         if ((scale === 1 && width === 320) || (scale === 2 && width === 640)) {
-          if (value.completionMode === 'manual') await page.screenshot({ path: `test-results/companion-goal-${scale * 100}.png` });
+          if (value.completionMode === 'manual') await page.screenshot({ path: `test-results/companion-${value.goal.id === 'mute' ? 'facetime-goal' : 'goal'}-${scale * 100}.png` });
           if (value.status === 'permission') await page.screenshot({ path: `test-results/companion-recovery-${scale * 100}.png` });
+          if (value.status === 'error') await page.screenshot({ path: `test-results/companion-error-${scale * 100}.png` });
         }
         if (heading === 'Reveal call buttons') await page.screenshot({ path: `test-results/coach-reveal-auto-${scale * 100}-${width}.png` });
+        if (value.lessonId?.startsWith('finder-') && value.canConfirm && ((scale === 1 && width === 320) || (scale === 2 && width === 540))) {
+          await page.screenshot({ path: `test-results/coach-${value.lessonId}-confirm-${scale * 100}-${width}.png` });
+        }
         if (heading === 'Button state unclear') await page.screenshot({ path: `test-results/coach-ambiguous-auto-${scale * 100}-${width}.png` });
         if (heading === 'Zoom In is unavailable') {
           await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -205,6 +253,11 @@ try {
       }
       await show({ lessonId: 'facetime-camera', currentAction: 'camera-off' }, 'Turn camera off'); await fit(maxHeight);
       await page.screenshot({ path: `test-results/coach-no-scroll-${scale * 100}-${width}.png` });
+      await openGuides();
+      await fit(maxHeight);
+      await page.mouse.move(0, 0);
+      await page.screenshot({ path: `test-results/companion-guides-${scale * 100}-${width}.png` });
+      await page.getByText('Guides', { exact: true }).click();
     });
   }
   await check('Shortcut hints are suppressed before commands and whenever click guidance is unavailable', async () => {
@@ -284,6 +337,54 @@ try {
       await fit(650);
     }
     assert.deepEqual(await meaningful(), before, 'Result questions never assert or submit success');
+  });
+  await check('Finder menu guides explain prerequisites, wait for explicit completion, and preserve learner confirmation', async () => {
+    for (const guide of finderGuides) {
+      await show({ lessonId: guide.lessonId, currentAction: 'open-file-menu', stepIndex: 0 }, 'Click File');
+      await page.getByText(guide.prerequisite, { exact: true }).waitFor();
+      await shortcuts();
+      assert.equal(await page.getByRole('button', { name: 'Complete', exact: true }).count(), 0);
+      const before = await meaningful();
+      // The injected observer supplies a fresh command, then eligible menu closure.
+      // No renderer click, elapsed timer, or missing target is outcome evidence.
+      await page.evaluate(value => window.updateState({ ...window.testState, ...value }), { currentAction: guide.action, stepIndex: 1 });
+      await page.getByRole('heading', { name: guide.title, exact: true }).waitFor();
+      await page.getByText(guide.explanation, { exact: true }).waitFor();
+      await shortcuts(guide.shortcut);
+      assert.equal(await page.getByRole('button', { name: 'Complete', exact: true }).count(), 0);
+      await page.evaluate(() => window.updateState({ ...window.testState, status: 'waiting-control', target: null, canConfirm: true }));
+      await page.getByRole('heading', { name: guide.confirmation, exact: true }).waitFor();
+      await page.getByText(guide.instruction, { exact: true }).waitFor();
+      await shortcuts();
+      assert.deepEqual(await meaningful(), before, 'Observations and instructions never complete the learner’s task');
+      const complete = page.getByRole('button', { name: 'Complete', exact: true });
+      assert.equal(await complete.getAttribute('aria-description'), guide.description);
+      await complete.focus();
+      await page.keyboard.press('Tab');
+      assert.equal(await page.getByRole('button', { name: 'Pause', exact: true }).evaluate(el => el === document.activeElement), true);
+      await page.keyboard.press('Shift+Tab');
+      assert.equal(await complete.evaluate(el => el === document.activeElement && el.matches(':focus-visible')), true);
+      await page.keyboard.press('Enter');
+      assert.deepEqual((await meaningful()).slice(before.length), [['confirm']], 'Only the learner’s Complete invokes confirmation');
+      await page.evaluate(() => window.updateState({ ...window.testState, status: 'complete', canConfirm: false, verification: 'self-confirmed' }));
+      await page.getByRole('heading', { name: 'Done', exact: true }).waitFor();
+      await page.getByText('You confirmed it.', { exact: true }).waitFor();
+      assert.equal(await page.getByText('Change confirmed.', { exact: true }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Complete', exact: true }).count(), 0);
+    }
+  });
+  await check('Finder unavailable and unreadable menu states show actionable recovery without retry or success', async () => {
+    const before = await meaningful();
+    for (const value of finderRecovery) {
+      await show({ ...value, currentAction: 'open-file-menu', status: 'waiting-control', target: null, canConfirm: false }, value.title);
+      await page.getByText(value.message, { exact: true }).waitFor();
+      await shortcuts();
+      assert.equal(await page.getByRole('button', { name: 'Complete', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Check again', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Pause', exact: true }).isEnabled(), true);
+      assert.equal(await page.getByRole('button', { name: 'Close help', exact: true }).isEnabled(), true);
+    }
+    assert.deepEqual(await meaningful(), before);
   });
   await check('Legacy Safari unavailable Zoom In explains recovery without a retry click or premature confirmation', async () => {
     await show({ lessonId: 'safari-zoom', status: 'waiting-control', currentAction: 'open-view-menu', stepIndex: 0, title: 'Zoom In is unavailable', message: 'Try another webpage, then open View.', why: '', target: null, canConfirm: false }, 'Zoom In is unavailable');
@@ -413,7 +514,7 @@ try {
     assert.deepEqual((await meaningful()).at(-1), ['stop']);
   });
   assert.deepEqual(errors, []);
-  await writeFile('test-results/ui-coach-results.json', JSON.stringify({ environment: 'Isolated renderer with bridge stubs and simulated native content-height resizing; no live screen, native permission or actual call test', passed: results.length, stateLayoutChecks: cases.length * 3, results, errors }, null, 2));
+  await writeFile('test-results/ui-coach-results.json', JSON.stringify({ environment: 'Isolated renderer with bridge stubs and simulated native content-height resizing; no live screen, native permission or actual call test', passed: results.length, stateLayoutChecks: cases.length * layouts.length, results, errors }, null, 2));
 } catch (error) {
   await page.screenshot({ path: 'test-results/coach-no-scroll-failure.png', fullPage: true });
   await writeFile('test-results/ui-coach-results.json', JSON.stringify({ results, errors, failure: String(error) }, null, 2));

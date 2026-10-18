@@ -7,9 +7,12 @@ import Vision
 // toolbar and tab tree are unrelated to menu lessons and can consume that whole
 // budget. An attached bookmark sheet is the exception: its Add button must stay
 // ahead of the menu scan while the learner is saving a bookmark.
-func visitObservationRegions(safari: Bool, attachedSheets: () -> Void, menuBar: () -> Void, document: () -> Void) {
+func visitObservationRegions(safari: Bool, finder: Bool = false, attachedSheets: () -> Void, menuBar: () -> Void, document: () -> Void) {
     if safari {
         attachedSheets()
+        menuBar()
+        document()
+    } else if finder {
         menuBar()
         document()
     } else {
@@ -30,11 +33,14 @@ func safariOCRAnchorIsPermitted(label: String, rect: CGRect, display: CGRect) ->
     ["View", "보기"].contains(label) && finiteRect(rect) && display.contains(rect) && rect.midY < display.minY + 42
 }
 
-func axObservation(_ application: NSRunningApplication, chromeSnapshot: [ChromeWindow]? = nil) -> (CGRect?, [[String: Any]]) {
+func axObservation(_ application: NSRunningApplication, chromeSnapshot: [ChromeWindow]? = nil) -> (CGRect?, [[String: Any]], String?) {
     let root = AXUIElementCreateApplication(application.processIdentifier)
     AXUIElementSetMessagingTimeout(root, 0.05)
     let safari = application.bundleIdentifier == "com.apple.Safari"
-    let safariWindows = safari ? chromeSnapshot ?? chromeWindows() ?? [] : []
+    let finder = application.bundleIdentifier == "com.apple.finder"
+    let chromeSnapshot = (safari || finder) ? chromeSnapshot ?? chromeWindows() : nil
+    let safariWindows = chromeSnapshot ?? []
+    var finderMenuContext = "unknown"
     var elements: [[String: Any]] = []
     var visited = 0
     var visitedSheets: Set<CFHashCode> = []
@@ -44,6 +50,77 @@ func axObservation(_ application: NSRunningApplication, chromeSnapshot: [ChromeW
     let start = Date()
     func withinBudget(_ depth: Int) -> Bool {
         !Task.isCancelled && depth <= 13 && visited < 650 && elements.count < 200 && Date().timeIntervalSince(start) < 0.65
+    }
+    func documentWindow(_ element: AXUIElement) -> Bool {
+        let role = stringAttribute(element, kAXRoleAttribute)
+        return finder ? finderWindowMayBeDocument(role: role, subrole: attribute(element, kAXSubroleAttribute) as? String,
+                                                  minimized: (attribute(element, kAXMinimizedAttribute) as? Bool) == true) : role == "AXWindow"
+    }
+    func finderMenus(_ bar: AXUIElement) {
+        guard let document = window, let chromeSnapshot,
+              uniqueSafariDocumentID(document, pid: application.processIdentifier, windows: chromeSnapshot) != nil,
+              let menuItems = attribute(bar, kAXChildrenAttribute) as? [AXUIElement], !menuItems.isEmpty else { return }
+        var complete = true
+        var menuStates: [(file: Bool, visibility: FinderMenuVisibility)] = []
+        for item in menuItems {
+            guard withinBudget(0) else { complete = false; break }
+            visited += 1
+            AXUIElementSetMessagingTimeout(item, 0.05)
+            guard let role = attribute(item, kAXRoleAttribute) as? String else { complete = false; continue }
+            guard role == "AXMenuBarItem" else { continue }
+            // Menu-bar titles are fixed app chrome, never file-list contents.
+            let isFile = finderFileMenuAnchor(stringAttribute(item, kAXTitleAttribute)) != nil
+            if isFile, let rect = rectOf(item), finiteRect(rect), (attribute(item, "AXHidden") as? Bool) != true {
+                elements.append(["id": "ax-\(visited)", "role": role, "label": "File", "enabled": true, "rect": dict(rect)])
+            }
+            guard let children = attribute(item, kAXChildrenAttribute) as? [AXUIElement], !children.isEmpty else { complete = false; continue }
+            var foundMenu = false
+            for menu in children {
+                guard withinBudget(1) else { complete = false; break }
+                visited += 1
+                AXUIElementSetMessagingTimeout(menu, 0.05)
+                guard let childRole = attribute(menu, kAXRoleAttribute) as? String else { complete = false; continue }
+                guard childRole == "AXMenu" else { continue }
+                foundMenu = true
+                let rect = rectOf(menu)
+                let hidden = attribute(menu, "AXHidden") as? Bool
+                let explicit = attribute(menu, "AXVisible") as? Bool
+                let visible = attribute(menu, kAXVisibleChildrenAttribute) as? [AXUIElement]
+                let hasWindow = rect.map { safariMenuWindowIsVisible($0, document: document, pid: application.processIdentifier, windows: chromeSnapshot) }
+                let visibility = finderMenuVisibility(hidden: hidden, explicitVisibility: explicit, visibleChildCount: visible?.count,
+                                                      hasMenuWindow: hasWindow, validGeometry: rect.map(finiteRect) ?? false)
+                menuStates.append((isFile, visibility))
+                // Inspect command text only in File. Other menus and nested
+                // submenus (including lists of apps/files) never get traversed.
+                guard isFile, visibility == .visible, let rect else { continue }
+                let commands: [AXUIElement]?
+                switch safariMenuChildSource(hidden: hidden == true, explicitVisibility: explicit, visibleChildCount: visible?.count, hasMenuWindow: hasWindow == true) {
+                case .none: commands = nil
+                case .visibleChildren: commands = visible
+                case .children: commands = attribute(menu, kAXChildrenAttribute) as? [AXUIElement]
+                }
+                guard let commands else { complete = false; continue }
+                for commandItem in commands {
+                    guard withinBudget(2) else { complete = false; break }
+                    visited += 1
+                    AXUIElementSetMessagingTimeout(commandItem, 0.05)
+                    guard stringAttribute(commandItem, kAXRoleAttribute) == "AXMenuItem",
+                          (attribute(commandItem, "AXHidden") as? Bool) != true,
+                          let enabled = attribute(commandItem, kAXEnabledAttribute) as? Bool,
+                          let commandRect = rectOf(commandItem), finiteRect(commandRect), rect.insetBy(dx: -2, dy: -2).contains(commandRect) else { continue }
+                    let shortcut = stringAttribute(commandItem, "AXMenuItemCmdChar")
+                    let virtualKey = (attribute(commandItem, "AXMenuItemCmdVirtualKey") as? NSNumber)?.intValue
+                    let modifiers = (attribute(commandItem, "AXMenuItemCmdModifiers") as? NSNumber)?.intValue
+                    // Only the exact fixed command is retained. Quick Look's
+                    // dynamic suffix is normalized before any output escapes.
+                    if let record = finderFileMenuRecord(id: "ax-\(visited)", role: "AXMenuItem", title: stringAttribute(commandItem, kAXTitleAttribute),
+                                                        menu: "File", visible: true, enabled: enabled, menuRect: rect, rect: commandRect,
+                                                        command: shortcut, virtualKey: virtualKey, modifiers: modifiers) { elements.append(record) }
+                }
+            }
+            if !foundMenu { complete = false }
+        }
+        finderMenuContext = finderObservedMenuContext(menuStates, complete: complete)
     }
     func bookmarkSheet(_ sheet: AXUIElement, depth: Int) {
         guard withinBudget(depth), let document = window, !visitedSheets.contains(CFHash(sheet)),
@@ -147,34 +224,50 @@ func axObservation(_ application: NSRunningApplication, chromeSnapshot: [ChromeW
     if let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() {
         let focusedElement = focused as! AXUIElement
         var focusedWindow = focusedElement
-        if safari, stringAttribute(focusedWindow, kAXRoleAttribute) != "AXWindow" {
+        if safari || finder, !documentWindow(focusedWindow) {
             // A sheet is not a new document identity. Resolve its owning window
             // through AX, never by choosing the frontmost CG menu or sheet.
             var owner: AXUIElement?
             if let candidate = attribute(focusedElement, kAXWindowAttribute), CFGetTypeID(candidate) == AXUIElementGetTypeID(),
-               stringAttribute(candidate as! AXUIElement, kAXRoleAttribute) == "AXWindow" { owner = (candidate as! AXUIElement) }
+               documentWindow(candidate as! AXUIElement) { owner = (candidate as! AXUIElement) }
             var ancestor = focusedElement
             for _ in 0..<4 where owner == nil && withinBudget(0) {
                 guard let parent = attribute(ancestor, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
                 ancestor = parent as! AXUIElement
                 AXUIElementSetMessagingTimeout(ancestor, 0.05)
-                if stringAttribute(ancestor, kAXRoleAttribute) == "AXWindow" { owner = ancestor }
+                if documentWindow(ancestor) { owner = ancestor }
             }
-            if owner == nil, let windows = attribute(root, kAXWindowsAttribute) as? [AXUIElement] {
+            if owner == nil {
+                var windows = attribute(root, kAXWindowsAttribute) as? [AXUIElement] ?? []
+                // A main window alone does not establish that a Quick Look
+                // panel belongs to it. It is only a candidate for the same
+                // explicit attached-child check used for AXSheets below.
+                if finder, let main = attribute(root, kAXMainWindowAttribute), CFGetTypeID(main) == AXUIElementGetTypeID() {
+                    let candidate = main as! AXUIElement
+                    if !windows.contains(where: { CFEqual($0, candidate) }) { windows.insert(candidate, at: 0) }
+                }
                 var owners: [AXUIElement] = []
                 for candidate in windows.prefix(8) where withinBudget(0) {
                     AXUIElementSetMessagingTimeout(candidate, 0.05)
-                    guard stringAttribute(candidate, kAXRoleAttribute) == "AXWindow" else { continue }
+                    guard documentWindow(candidate) else { continue }
                     let sheets = attribute(candidate, "AXSheets") as? [AXUIElement] ?? []
                     let children = attribute(candidate, kAXChildrenAttribute) as? [AXUIElement] ?? []
-                    if (sheets + children).contains(where: { CFEqual($0, focusedElement) }) { owners.append(candidate) }
+                    let attached = (sheets + children).contains(where: { CFEqual($0, focusedElement) })
+                    if finder {
+                        if finderAttachedDocumentIsValid(attached: attached, role: stringAttribute(candidate, kAXRoleAttribute),
+                                                         subrole: attribute(candidate, kAXSubroleAttribute) as? String,
+                                                         minimized: (attribute(candidate, kAXMinimizedAttribute) as? Bool) == true,
+                                                         rect: rectOf(candidate), pid: application.processIdentifier,
+                                                         windows: chromeSnapshot ?? []) { owners.append(candidate) }
+                    } else if attached { owners.append(candidate) }
                 }
                 if owners.count == 1 { owner = owners[0] }
             }
-            guard let owner else { return (nil, []) }
+            guard let owner else { return (nil, [], finder ? "unknown" : nil) }
             focusedWindow = owner
         }
         AXUIElementSetMessagingTimeout(focusedWindow, 0.05)
+        if finder, (attribute(focusedWindow, kAXMinimizedAttribute) as? Bool) == true { return (nil, [], "unknown") }
         window = rectOf(focusedWindow)
         documentRoot = focusedWindow
         if safari {
@@ -184,14 +277,20 @@ func axObservation(_ application: NSRunningApplication, chromeSnapshot: [ChromeW
     }
     // Resolve the focused document before reading menu visibility. Do not let a
     // menu's layer-zero CG window become this observation's document identity.
-    visitObservationRegions(safari: safari, attachedSheets: {
+    visitObservationRegions(safari: safari, finder: finder, attachedSheets: {
         for sheet in visibleSheets { bookmarkSheet(sheet, depth: 1) }
     }, menuBar: {
-        if let menu = attribute(root, kAXMenuBarAttribute), CFGetTypeID(menu) == AXUIElementGetTypeID() { walk(menu as! AXUIElement, depth: 0, selected: false) }
+        if let menu = attribute(root, kAXMenuBarAttribute), CFGetTypeID(menu) == AXUIElementGetTypeID() {
+            if finder { finderMenus(menu as! AXUIElement) }
+            else { walk(menu as! AXUIElement, depth: 0, selected: false) }
+        }
     }, document: {
-        if let documentRoot { walk(documentRoot, depth: 0, selected: false) }
+        // An open Finder menu owns the interaction. Its commands do not need
+        // file-list/sidebar labels, and those trees must not spend this read's
+        // remaining budget. Closed-menu Downloads observation stays unchanged.
+        if !(finder && ["file", "other"].contains(finderMenuContext)), let documentRoot { walk(documentRoot, depth: 0, selected: false) }
     })
-    return (window, elements)
+    return (window, elements, finder ? finderMenuContext : nil)
 }
 
 func recognizeControls(_ image: CGImage, region: CGRect, displayFrame: CGRect) throws -> [(String, CGRect)] {

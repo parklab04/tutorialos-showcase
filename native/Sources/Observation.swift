@@ -16,6 +16,7 @@ func observation(arguments: [String]) async -> [String: Any] {
         result.removeValue(forKey: "windowId")
         result.removeValue(forKey: "observedBundleId")
         result.removeValue(forKey: "controlVisibility")
+        result.removeValue(forKey: "finderMenuContext")
     }
     let wantsFaceTime = arguments == ["--observe", "com.apple.FaceTime"]
     if wantsFaceTime, trusted {
@@ -38,8 +39,8 @@ func observation(arguments: [String]) async -> [String: Any] {
        arguments.count == 2, arguments[0] == "--observe", allowedBundles.contains(arguments[1]), let application, application.bundleIdentifier == arguments[1] {
         // Keep the target and its identity from the same unchanged window.
         let originalWindowId = frontWindow(application.processIdentifier)?.0
-        let safariAX = trusted && application.bundleIdentifier == "com.apple.Safari"
-        let originalChromeWindows = safariAX ? chromeWindows() : nil
+        let chromeAX = trusted && ["com.apple.Safari", "com.apple.finder"].contains(application.bundleIdentifier ?? "")
+        let originalChromeWindows = chromeAX ? chromeWindows() : nil
         var accessibilityWindow: CGRect?
         if trusted {
             let observed = axObservation(application, chromeSnapshot: originalChromeWindows)
@@ -47,6 +48,7 @@ func observation(arguments: [String]) async -> [String: Any] {
             result["window"] = observed.0.map(dict) ?? (NSNull() as Any)
             result["elements"] = observed.1
             result["source"] = "accessibility"
+            if let context = observed.2 { result["finderMenuContext"] = context }
         }
         guard !Task.isCancelled else { return ["error": "observation_cancelled"] }
         if (!trusted || (result["elements"] as? [[String: Any]])?.isEmpty == true), screenCapture, application.bundleIdentifier != "com.apple.FaceTime", #available(macOS 14.2, *) {
@@ -54,11 +56,12 @@ func observation(arguments: [String]) async -> [String: Any] {
                 result["window"] = observed.0.map(dict) ?? (NSNull() as Any)
                 result["elements"] = observed.1
                 result["source"] = "ocr"
+                result.removeValue(forKey: "finderMenuContext")
             }
         }
         guard !Task.isCancelled else { return ["error": "observation_cancelled"] }
         let currentWindow = frontWindow(application.processIdentifier)
-        if safariAX, (result["source"] as? String) == "accessibility" {
+        if chromeAX, (result["source"] as? String) == "accessibility" {
             // Menus/sheets can be the first layer-zero Safari CG window. Match
             // the AX document geometry in both metadata snapshots instead, so
             // opening a menu cannot invent a new document/session identity.

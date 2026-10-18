@@ -9,8 +9,8 @@ const browser = await chromium.launch({ executablePath: '/Applications/Google Ch
 const results = [];
 const errors = [];
 const check = async (name, run) => { await run(); results.push({ name, passed: true }); console.log('PASS', name); };
-const makePage = async ({ card = false, source = 'preview', app = 'facetime', delayedRead = false } = {}) => {
-  const page = await browser.newPage({ viewport: card ? { width: 360, height: 420 } : { width: 1180, height: 760 }, deviceScaleFactor: 1 });
+const makePage = async ({ card = false, source = 'preview', app = 'facetime', delayedRead = false, deviceScaleFactor = 1 } = {}) => {
+  const page = await browser.newPage({ viewport: card ? { width: 360, height: 420 } : { width: 1180, height: 760 }, deviceScaleFactor });
   page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript(({ card, source, app, delayedRead }) => {
     window.calls = [];
@@ -72,11 +72,16 @@ const fitCard = async (page, maximumHeight = 680) => {
     width: innerWidth, height: innerHeight,
     documentFits: document.documentElement.scrollHeight <= innerHeight + 1 && document.documentElement.scrollWidth <= innerWidth + 1,
     boxes: [...document.querySelectorAll('.call-help-card, .call-help-content, .call-help-body, .call-help-footer')].map(el => ({ label: el.className, overflow: getComputedStyle(el).overflowY, scrollHeight: el.scrollHeight, height: el.clientHeight, scrollWidth: el.scrollWidth, width: el.clientWidth })),
-    controls: [...document.querySelectorAll('.call-help-card button, .call-help-choice > span, .call-help-choice > svg, .call-help-card h1, .call-help-chip, .call-help-body > p')].map(el => { const r = el.getBoundingClientRect(); return { label: el.textContent, x: r.x, y: r.y, width: r.width, height: r.height }; }),
+    controls: [...document.querySelectorAll('.call-help-card button, .call-help-choice > span, .call-help-choice > svg, .call-help-card h1, .call-help-chip, .call-help-body > p')].map(el => { const r = el.getBoundingClientRect(); return { label: el.textContent || el.getAttribute('aria-label'), button: el.tagName === 'BUTTON', x: r.x, y: r.y, width: r.width, height: r.height }; }),
   }));
   assert.ok(layout.documentFits, 'Floating help must not scroll');
   for (const box of layout.boxes) { assert.ok(box.scrollHeight <= box.height + 1 && box.scrollWidth <= box.width + 1, `${box.label} must not clip content`); assert.equal(['auto', 'scroll'].includes(box.overflow), false); }
-  for (const box of layout.controls) assert.ok(box.x >= -1 && box.y >= -1 && box.x + box.width <= layout.width + 1 && box.y + box.height <= layout.height + 1, `${box.label} must fit without scrolling`);
+  for (const box of layout.controls) {
+    assert.ok(box.x >= -1 && box.y >= -1 && box.x + box.width <= layout.width + 1 && box.y + box.height <= layout.height + 1, `${box.label} must fit without scrolling`);
+    if (box.button) assert.ok(box.width >= 44 && box.height >= 44, `${box.label} must retain a 44px click target`);
+  }
+  // Settle the compositor after the fixture's native-height resize before capture.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 };
 let page;
 try {
@@ -301,6 +306,26 @@ try {
     }
     await page.screenshot({ path: 'test-results/call-help-preview-360.png' });
   });
+  await check('Keyboard navigation reaches each guide and footer action with a visible focus indicator without starting help', async () => {
+    const controls = page.locator('.call-help-card button:enabled');
+    const count = await controls.count();
+    const before = await actions(page);
+    await controls.first().focus();
+    for (let index = 1; index < count; index++) {
+      await page.keyboard.press('Tab');
+      assert.equal(await controls.nth(index).evaluate(element => element === document.activeElement), true, 'Tab follows the chooser reading order');
+      const focus = await controls.nth(index).evaluate(element => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        const extent = Number.parseFloat(style.outlineWidth) + Math.max(0, Number.parseFloat(style.outlineOffset));
+        return { visible: element.matches(':focus-visible'), style: style.outlineStyle, width: Number.parseFloat(style.outlineWidth), fits: rect.left - extent >= 0 && rect.top - extent >= 0 && rect.right + extent <= innerWidth && rect.bottom + extent <= innerHeight };
+      });
+      assert.ok(focus.visible && focus.style !== 'none' && focus.width >= 2 && focus.fits, 'Keyboard focus stays visible and unclipped');
+    }
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await controls.nth(count - 2).evaluate(element => element === document.activeElement), true, 'Shift+Tab can return to Not now');
+    assert.deepEqual(await actions(page), before);
+  });
   await check('Each suggestion choice sends its own supported FaceTime guide ID', async () => {
     for (const id of ['facetime-mic', 'facetime-camera', 'facetime-end']) {
       await choice(page, id).click();
@@ -363,7 +388,7 @@ try {
     await page.getByRole('button', { name: 'Close FaceTime help', exact: true }).click();
   });
   await page.close();
-  for (const [app, name, ids] of [['facetime', 'FaceTime', ['facetime-mic', 'facetime-camera', 'facetime-end']], ['safari', 'Safari', ['safari-zoom', 'safari-reader', 'safari-bookmark', 'safari-reopen-tab']], ['finder', 'Finder', ['finder-downloads']]]) {
+  for (const [app, name, ids] of [['facetime', 'FaceTime', ['facetime-mic', 'facetime-camera', 'facetime-end']], ['safari', 'Safari', ['safari-zoom', 'safari-reader', 'safari-bookmark', 'safari-reopen-tab']], ['finder', 'Finder', ['finder-downloads', 'finder-new-folder', 'finder-rename', 'finder-quick-look']]]) {
     page = await makePage({ card: true, app, source: 'activation' });
     await check(`${name} activation shows only matching guides, with no call claim, prompt, or automatic start`, async () => {
       await page.getByRole('heading', { name: `${name} help`, exact: true }).waitFor();
@@ -376,6 +401,17 @@ try {
       for (const id of ids) {
         await choice(page, id).click();
         assert.deepEqual((await actions(page)).at(-1), ['choose', id]);
+      }
+      if (app === 'finder') {
+        const before = await actions(page);
+        await page.getByRole('button', { name: 'Close Finder help', exact: true }).focus();
+        for (const id of ids) {
+          await page.keyboard.press('Tab');
+          assert.equal(await choice(page, id).evaluate(el => el === document.activeElement && el.matches(':focus-visible')), true, `${id} is reachable in reading order`);
+        }
+        assert.deepEqual(await actions(page), before, 'Navigating Finder choices cannot start a guide');
+        await page.keyboard.press('Enter');
+        assert.deepEqual((await actions(page)).slice(before.length), [['choose', 'finder-quick-look']], 'Keyboard selection sends only the chosen Finder guide');
       }
       for (const [scale, width, max] of [[1, 360, 600], [2, 720, 680], [2, 540, 600]]) {
         await page.evaluate(value => { localStorage.setItem('helpos:text-scale', String(value)); window.dispatchEvent(new StorageEvent('storage', { key: 'helpos:text-scale', newValue: String(value) })); }, scale);
@@ -391,28 +427,29 @@ try {
     page = await makePage({ card: true, app, source: 'preview' });
     await check(`${name} internal preview stays labeled and does not promise a Practice scene`, async () => {
       await page.getByText('Demo preview', { exact: true }).waitFor();
-      await page.getByText('Choose a guide for your open app.', { exact: true }).waitFor();
+      if (app !== 'finder') await page.getByText('Choose a guide for your open app.', { exact: true }).waitFor();
       assert.deepEqual(await page.locator('[data-call-lesson]').evaluateAll(elements => elements.map(el => el.dataset.callLesson)), ids);
       await fitCard(page);
       assert.deepEqual(await actions(page), []);
     });
-    if (app === 'safari') await check('Four Safari preview guides, pending choice, and retry fit every supported text size without scrolling', async () => {
+    if (app === 'safari' || app === 'finder') await check(`Four ${name} preview guides, pending choice, and retry fit every supported text size without scrolling`, async () => {
       for (const [scale, width, maximum] of [[1, 360, 600], [1.25, 450, 600], [1.5, 540, 600], [2, 720, 680], [2, 540, 600]]) {
         await page.evaluate(value => { localStorage.setItem('helpos:text-scale', String(value)); window.dispatchEvent(new StorageEvent('storage', { key: 'helpos:text-scale', newValue: String(value) })); }, scale);
         await page.setViewportSize({ width, height: maximum });
         await page.waitForFunction(value => window.calls.some(call => call[0] === 'scale' && call[1] === value), scale);
         await fitCard(page, maximum);
         assert.equal(await page.locator('[data-call-lesson]').count(), 4);
-        await page.getByText('Choose a guide for your open app.', { exact: true }).waitFor();
-        await page.screenshot({ path: `test-results/safari-help-preview-${scale}-${width}.png` });
+        await page.getByText('Demo preview', { exact: true }).waitFor();
+        if (app !== 'finder') await page.getByText('Choose a guide for your open app.', { exact: true }).waitFor();
+        await page.screenshot({ path: `test-results/${app}-help-preview-${scale}-${width}.png` });
       }
       await page.evaluate(() => { window.failChoice = true; });
-      await choice(page, 'safari-reader').click();
+      await choice(page, ids[1]).click();
       await page.getByRole('alert').waitFor();
       await fitCard(page, 600);
-      await page.screenshot({ path: 'test-results/safari-help-retry-200-540.png' });
+      await page.screenshot({ path: `test-results/${app}-help-retry-200-540.png` });
       await page.evaluate(() => { window.failChoice = false; window.delayChoice = true; });
-      await choice(page, 'safari-bookmark').click();
+      await choice(page, ids[2]).click();
       await page.getByRole('status').waitFor();
       await fitCard(page, 600);
       assert.equal(await page.getByRole('button', { name: 'Not now', exact: true }).isEnabled(), true);
@@ -422,7 +459,17 @@ try {
     });
     await page.close();
   }
-  for (const id of ['facetime-mic', 'facetime-camera', 'facetime-end', 'safari-zoom', 'safari-reader', 'safari-bookmark', 'safari-reopen-tab', 'finder-downloads']) {
+  // A higher-density showcase preserves the same 360-DIP chooser geometry.
+  // Its observation/IPC boundaries remain the same isolated fixture as above.
+  for (const app of ['safari', 'finder']) {
+    page = await makePage({ card: true, app, source: 'activation', deviceScaleFactor: 2 });
+    await page.getByRole('heading', { name: `${app === 'safari' ? 'Safari' : 'Finder'} help`, exact: true }).waitFor();
+    await fitCard(page, 600);
+    assert.deepEqual(await actions(page), []);
+    await page.screenshot({ path: `test-results/app-help-${app}-showcase-2x.png` });
+    await page.close();
+  }
+  for (const id of ['facetime-mic', 'facetime-camera', 'facetime-end', 'safari-zoom', 'safari-reader', 'safari-bookmark', 'safari-reopen-tab', 'finder-downloads', 'finder-new-folder', 'finder-rename', 'finder-quick-look']) {
     page = await makePage();
     await check(`Retired Practice hash ${id} returns the current Home without starting a guide`, async () => {
       await page.goto(`${baseURL}/#practice/${id}`);
